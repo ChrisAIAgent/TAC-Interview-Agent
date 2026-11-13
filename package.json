@@ -1,0 +1,61 @@
+{
+  "name": "tac-interview-agent",
+  "version": "0.1.0",
+  "description": "TAC Interview Agent desktop overlay",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "preview": "electron-vite preview",
+    "dist": "npm run build:native && npm run build && electron-builder",
+    "build:native": "node scripts/build-native.cjs"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^3.0.0",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11"
+  },
+  "build": {
+    "appId": "com.tac.interviewagent",
+    "productName": "TAC Interview Agent",
+    "files": [
+      "out/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg",
+      "binaries": [
+        "Contents/Resources/keylistener/keylistener-darwin"
+      ],
+      "hardenedRuntime": true
+    },
+    "extraResources": [
+      {
+        "from": "resources/keylistener",
+        "to": "keylistener",
+        "filter": [
+          "keylistener-win32.exe",
+          "keylistener-darwin"
+        ]
+      }
+    ]
+  },
+  "allowScripts": {
+    "electron@33.4.11": true,
+    "esbuild@0.25.12": true,
+    "esbuild@0.21.5": true
+  }
+}

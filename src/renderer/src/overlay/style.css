@@ -31,3 +31,7 @@ h1 { margin: 0; font-size: 19px; line-height: 1.3; letter-spacing: .04em; font-w
 .edge-bar { width: 100%; height: 100%; background: rgba(130,130,130,.12); }
 
 .share-warning { margin: 12px 0 0; padding: 8px; color: #ffd3bd; background: rgba(181,70,22,.18); font-size: 11px; line-height: 1.4; }
+
+.answer-content { min-height:0; overflow:auto; margin-top:14px; padding:10px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); font-size:12px; line-height:1.55; }
+.answer-question { color:#f4c6c9; font-weight:700; } .answer-markdown { color:#eeeeef; overflow-wrap:anywhere; } .answer-markdown pre { overflow:auto; padding:8px; background:#111; }
+.answer-error { color:#ff9a9a; }.answer-actions { display:flex; gap:8px; }.answer-actions button { border:1px solid #555; background:#202125; color:#ddd; font-size:10px; padding:4px 8px; cursor:pointer; }

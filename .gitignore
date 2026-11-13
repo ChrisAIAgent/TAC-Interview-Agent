@@ -9,3 +9,13 @@ resources/keylistener/keylistener-darwin
 
 # 营销/参考素材：大体积二进制，不入库
 TAC Marketing/
+
+# 调试残留：Electron 测试用的临时 app 与 Chromium profile
+.drag-test-app/
+.drag-test-profile/
+*.asar
+
+# 凭证与本机配置
+.env
+.env.*
+credentials*.json

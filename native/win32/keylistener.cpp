@@ -5,6 +5,7 @@
 #include <powrprof.h>
 #include <cstdio>
 #include <cstdint>
+#include <cstddef>
 #include <cstring>
 #include <chrono>
 #include <map>
@@ -73,10 +74,13 @@ static void onTargetKey(HANDLE device, unsigned scan, bool up) {
     send("{\"t\":\"combo\",\"pressed\":true,\"epoch\":" + std::to_string(epoch) + ",\"id\":" + std::to_string(markEvent()) + "}");
   }
 }
+static bool keyboardPacketSizeValid(UINT size) {
+  return size >= offsetof(RAWINPUT,data.keyboard) + sizeof(RAWKEYBOARD) && size <= 4096;
+}
 static void onInput(HRAWINPUT input) {
   UINT size=0;
-  if (GetRawInputData(input, RID_INPUT, nullptr, &size, sizeof(RAWINPUTHEADER)) != 0 || size < sizeof(RAWINPUT) || size > 4096) return;
-  BYTE buffer[4096];
+  if (GetRawInputData(input, RID_INPUT, nullptr, &size, sizeof(RAWINPUTHEADER)) != 0 || !keyboardPacketSizeValid(size)) return;
+  alignas(RAWINPUT) BYTE buffer[4096];
   if (GetRawInputData(input, RID_INPUT, buffer, &size, sizeof(RAWINPUTHEADER)) != size) return;
   auto* raw=reinterpret_cast<RAWINPUT*>(buffer);
   if (raw->header.dwType != RIM_TYPEKEYBOARD) return;
@@ -116,6 +120,11 @@ static LRESULT CALLBACK wndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
   return DefWindowProcW(hwnd,msg,wp,lp);
 }
 int main(int argc, char** argv) {
+  if (argc == 2 && std::strcmp(argv[1],"--size-self-test") == 0) {
+    const auto min=static_cast<UINT>(offsetof(RAWINPUT,data.keyboard)+sizeof(RAWKEYBOARD));
+    std::printf("{\"minimum\":%u,\"unionSize\":%zu,\"acceptMinimum\":%s,\"rejectShort\":%s}\n",min,sizeof(RAWINPUT),keyboardPacketSizeValid(min)?"true":"false",keyboardPacketSizeValid(min-1)?"false":"true");
+    return 0;
+  }
   if (argc == 2 && std::strcmp(argv[1],"--self-test") == 0) {
     HANDLE first=reinterpret_cast<HANDLE>(1), second=reinterpret_cast<HANDLE>(2);
     armed=true; epoch=1;

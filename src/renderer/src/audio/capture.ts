@@ -8,6 +8,14 @@ export interface CaptureOptions {
   onEnded?(): void;
 }
 
+/** A safe, user-facing capture failure; never exposes platform or provider errors. */
+export class SystemAudioCaptureError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SystemAudioCaptureError';
+  }
+}
+
 /**
  * Requests screen loopback (not microphone) from Electron's display-media
  * handler. Called only after a direct user gesture. Capture is local only:
@@ -35,12 +43,14 @@ export async function startSystemAudio(options: CaptureOptions): Promise<Capture
     stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
     const audio = stream.getAudioTracks()[0];
     stream.getVideoTracks().forEach((track) => track.stop());
-    if (!audio || audio.readyState !== 'live') throw new Error('未获得有效的系统音频流，请检查系统权限与设备。');
+    if (!audio || audio.readyState !== 'live') {
+      throw new SystemAudioCaptureError('没有取得有效的系统音频轨道，或音轨已结束。请检查系统权限、音频设备和当前版本的系统音频支持。');
+    }
     context = new AudioContext({ sampleRate: 16000 });
     // Never silently label a different sample rate as 16 kHz.
-    if (context.sampleRate !== 16000) throw new Error('当前环境无法创建 16 kHz 音频上下文。');
+    if (context.sampleRate !== 16000) throw new SystemAudioCaptureError('当前环境无法创建 16 kHz 音频上下文。');
     await context.audioWorklet.addModule(options.workletUrl);
-    if (audio.readyState !== 'live') throw new Error('系统音频流已结束。');
+    if (audio.readyState !== 'live') throw new SystemAudioCaptureError('系统音频轨道已结束，请检查系统权限和音频设备。');
     source = context.createMediaStreamSource(stream);
     processor = new AudioWorkletNode(context, 'interview-pcm', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] });
     sink = context.createGain();
@@ -56,14 +66,14 @@ export async function startSystemAudio(options: CaptureOptions): Promise<Capture
     processor.connect(sink);
     sink.connect(context.destination);
     await context.resume();
-    if (context.state !== 'running') throw new Error('音频上下文未能启动。');
+    if (context.state !== 'running') throw new SystemAudioCaptureError('音频上下文未能启动。');
     audio.addEventListener('ended', () => {
       if (!stopped) {
         void stop();
         options.onEnded?.();
       }
     }, { once: true });
-    if (audio.readyState !== 'live') throw new Error('系统音频流已结束。');
+    if (audio.readyState !== 'live') throw new SystemAudioCaptureError('系统音频轨道已结束，请检查系统权限和音频设备。');
     return { stop };
   } catch (error) {
     await stop();

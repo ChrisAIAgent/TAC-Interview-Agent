@@ -1,261 +1,163 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, powerMonitor, screen, shell, Tray } from 'electron';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-import { KeyListener, listenerPath, type ListenerSnapshot } from './platform/keylistener';
-import { initialHoldState, updateHold, mayReveal, isCurrentReveal } from './platform/hold-state';
+import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, screen, Tray } from 'electron';
+import { insideDragBar } from './platform/overlay-hit-test';
 import { join } from 'node:path';
-import { scanProcesses, type DetectedProcess } from './platform/processes';
-import { getCredentials, saveCredentials } from './store/credentials';
+import { getCredentials, saveCredentials, getTencentCredentials, getLlmConfiguration } from './store/credentials';
+import { OpenAICompatProvider } from './llm/openai-compat';
+import { OllamaProvider } from './llm/ollama';
+import { AnswerManager, type AnswerUpdate } from './llm/answer-manager';
+import { buildTencentWsUrl } from './asr/tencent-sign';
+import { installSystemAudioHandler } from './platform/systemAudio';
+import { loadResume, saveResume } from './store/resume';
+import { DEFAULT_TOGGLE_SHORTCUT, readPreferences, savePreferences } from './store/preferences';
 
-type ShareMode = 'unconfirmed' | 'tab-or-window' | 'full-screen' | 'unknown';
-type DeclaredMode = Exclude<ShareMode, 'unconfirmed'>;
-interface GuardState {
-  platform: string;
-  mode: ShareMode;
-  riskLevel: 'unknown' | 'low' | 'medium' | 'high';
-  detectedProcs: DetectedProcess[];
-  scanAvailable: boolean;
-  holdToRevealAvailable: boolean;
-  presentation: 'edge' | 'revealed' | 'hidden';
-  listener: ListenerSnapshot;
-  revealTicket: number;
-  expandApiMs?: number;
-  collapseApiMs?: number;
-  expandRoundTripMs?: number;
-  collapseRoundTripMs?: number;
-  declaredAt?: number;
-  reason?: string;
+interface WindowState { shortcut: string; shortcutError: string | null; visible: boolean }
+let overlay: BrowserWindow | null=null;
+let settings: BrowserWindow | null=null;
+let tray: Tray | null=null;
+let shortcut=DEFAULT_TOGGLE_SHORTCUT;
+let shortcutError: string | null=null;
+let registeredShortcut: string | null=null;
+let expandedHeight=360;
+let quitting=false;
+let inDragBar=false;
+let rendererIgnoresMouse=true;
+let currentIgnore=true;
+let mousePoll:ReturnType<typeof setInterval>|null=null;
+function syncOverlayMouse():void {
+  if(!overlay || overlay.isDestroyed() || !overlay.isVisible()) return;
+  const inside=insideDragBar(screen.getCursorScreenPoint(),overlay.getBounds());
+  if(inDragBar && !inside) rendererIgnoresMouse=true;
+  inDragBar=inside;
+  const ignore=!inside && rendererIgnoresMouse;
+  if(ignore!==currentIgnore){overlay.setIgnoreMouseEvents(ignore,ignore?{forward:true}:undefined);currentIgnore=ignore;}
 }
-let overlay: BrowserWindow | null = null;
-let settings: BrowserWindow | null = null;
-let tray: Tray | null = null;
-let expandedHeight = 360;
-let normalBounds: Electron.Rectangle | null = null;
-let guard: GuardState = { platform: process.platform, mode: 'unconfirmed', riskLevel: 'unknown', detectedProcs: [], scanAvailable: false, holdToRevealAvailable: false, presentation: 'edge', listener: { status: 'disabled', sameDevice: false, armed: false }, revealTicket: 0 };
-let hold = initialHoldState;
-let keyListener: KeyListener | null = null;
-let pendingRevealEventId: number | undefined;
-let pendingRevealTimeout: ReturnType<typeof setTimeout> | null = null;
+async function loadProvider(){
+  const cfg=await getLlmConfiguration();
+  return cfg.provider==='ollama'
+    ? {provider:new OllamaProvider(cfg.model,cfg.baseUrl),remote:false}
+    : {provider:new OpenAICompatProvider(cfg.model,cfg.apiKey,cfg.baseUrl),remote:true};
+}
+function publishAnswer(value:AnswerUpdate):void {
+  for(const win of [overlay,settings]) if(win && !win.isDestroyed()) win.webContents.send('llm:answer',value);
+}
+const answers=new AnswerManager(loadProvider,publishAnswer);
 
-function notifyGuard(): void {
-  for (const win of [overlay, settings]) if (win && !win.isDestroyed()) win.webContents.send('guard:state', guard);
+function state(): WindowState { return { shortcut, shortcutError, visible: !!overlay?.isVisible() }; }
+function notifyState(): void {
+  for (const win of [overlay,settings]) if (win && !win.isDestroyed()) win.webContents.send('window:state',state());
 }
-function applyGuard(): void {
-  if (!overlay || overlay.isDestroyed()) return;
-  if (guard.mode === 'unknown') {
-    overlay.hide();
-  } else if (guard.mode === 'full-screen') {
-    if (!normalBounds) normalBounds = overlay.getBounds();
-    if (guard.presentation === 'revealed') return;
-    const before=performance.now();
-    overlay.hide();
-    overlay.setMinimumSize(1, 1);
-    const display=screen.getDisplayMatching(normalBounds);
-    const area=display.workArea;
-    const width=Math.max(1, Math.round(1 / display.scaleFactor));
-    const height=Math.max(1, Math.round(area.height * 0.6));
-    overlay.setBounds({ x: area.x + area.width - width, y: area.y + Math.round((area.height - height) / 2), width, height });
-    overlay.setIgnoreMouseEvents(true, { forward: true });
-    overlay.showInactive();
-    guard.collapseApiMs=performance.now()-before;
-  } else {
-    if (normalBounds) {
-      overlay.hide(); overlay.setMinimumSize(380, 72); overlay.setBounds(normalBounds); normalBounds=null;
-      overlay.setIgnoreMouseEvents(true, { forward: true });
-    }
-    overlay.showInactive();
-  }
-  notifyGuard();
-}
-function collapseHold(resetListener: boolean): void {
-  if (pendingRevealTimeout) clearTimeout(pendingRevealTimeout);
-  pendingRevealTimeout=null; pendingRevealEventId=undefined;
-  hold=updateHold(hold, { type: 'reset' });
-  guard.presentation=guard.mode === 'unknown' ? 'hidden' : 'edge';
-  keyListener?.endLease();
-  if (guard.mode === 'full-screen') applyGuard();
-  if (resetListener) keyListener?.reset();
-  notifyGuard();
-}
-function startReveal(eventId?: number): void {
-  if (!overlay || overlay.isDestroyed() || !normalBounds || !mayReveal(hold)) return;
-  const ticket=hold.version;
-  const before=performance.now();
-  keyListener?.beginLease();
-  overlay.hide();
-  overlay.setMinimumSize(380, 72);
-  overlay.setBounds(normalBounds);
-  guard.presentation='revealed'; guard.revealTicket=ticket; pendingRevealEventId=eventId;
-  guard.expandApiMs=performance.now()-before;
-  notifyGuard();
-  pendingRevealTimeout=setTimeout(() => { if (isCurrentReveal(hold,ticket)) collapseHold(true); }, 1_000);
-}
-function onListenerStatus(value: ListenerSnapshot): void {
-  const wasPressed=hold.pressed;
-  hold=updateHold(hold,{ type: 'ready', ready: value.status === 'ready', armed: value.armed });
-  guard.listener=value; guard.holdToRevealAvailable=value.status === 'ready' && value.sameDevice;
-  if (wasPressed && !hold.pressed) collapseHold(false);
-  notifyGuard(); updateTray();
-}
-function createListener(): void {
-  keyListener=new KeyListener({
-    status: onListenerStatus,
-    combo: (pressed,eventId) => {
-      if (!pressed) { collapseHold(false); keyListener?.acknowledge(eventId,'collapse'); return; }
-      hold=updateHold(hold,{ type: 'combo', pressed: true });
-      if (mayReveal(hold)) startReveal(eventId);
-    },
-    latency: (kind,ms) => { if (kind === 'expand') guard.expandRoundTripMs=ms; else guard.collapseRoundTripMs=ms; notifyGuard(); },
-    leaseExpired: () => { collapseHold(true); },
-    displaySleep: () => { resetHold(); },
-  }, listenerPath(app.isPackaged, process.resourcesPath, app.getAppPath(), process.platform));
-}
-function resetHold(): void { collapseHold(true); }
-async function refreshScan(): Promise<void> {
-  const result = await scanProcesses();
-  guard = { ...guard, ...result };
-  if (result.detectedProcs.some((item) => item.kind === 'proctoring')) {
-    resetHold(); hold=updateHold(hold,{ type: 'mode', mode: 'unknown' });
-    guard = { ...guard, mode: 'unknown', presentation: 'hidden', riskLevel: 'high', reason: '检测到已知监考进程，已停止显示内容。' };
-    applyGuard();
-  } else {
-    notifyGuard();
-  }
-}
-async function declareShare(mode: unknown): Promise<GuardState> {
-  if (mode !== 'tab-or-window' && mode !== 'full-screen' && mode !== 'unknown') throw new Error('请选择共享范围。');
-  const scan = await scanProcesses();
-  const proctored = scan.detectedProcs.some((item) => item.kind === 'proctoring');
-  const finalMode: DeclaredMode = proctored ? 'unknown' : mode;
-  resetHold();
-  hold=updateHold(hold,{ type: 'mode', mode: finalMode });
-  guard = {
-    ...guard, ...scan,
-    mode: finalMode, presentation: finalMode === 'unknown' ? 'hidden' : 'edge',
-    riskLevel: finalMode === 'tab-or-window' ? 'low' : finalMode === 'full-screen' ? 'medium' : 'high',
-    declaredAt: Date.now(),
-    reason: proctored ? '检测到已知监考进程，已停止显示内容。' : undefined,
-  };
-  applyGuard();
-  return guard;
+function showOverlay(): void { if (overlay && !overlay.isDestroyed()) { overlay.showInactive(); notifyState(); } }
+function hideOverlay(): void { if (overlay && !overlay.isDestroyed()) { overlay.hide(); notifyState(); } }
+function toggleOverlay(): void { if (overlay?.isVisible()) hideOverlay(); else showOverlay(); }
+function registerShortcut(candidate: string): boolean {
+  try {
+    if (registeredShortcut===candidate) return true;
+    if (!globalShortcut.register(candidate,toggleOverlay)) return false;
+    if (registeredShortcut) globalShortcut.unregister(registeredShortcut);
+    registeredShortcut=candidate; shortcut=candidate; shortcutError=null; notifyState(); return true;
+  } catch { return false; }
 }
 function createOverlay(): void {
-  overlay = new BrowserWindow({ width: 440, height: expandedHeight, minWidth: 380, minHeight: 72,
-    frame: false, transparent: true, resizable: true, movable: true, alwaysOnTop: true,
-    skipTaskbar: true, hasShadow: false, focusable: false, fullscreenable: false, show: false, title: '',
-    webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, nodeIntegration: false, sandbox: true },
-  });
-  overlay.setTitle('');
-  overlay.setAlwaysOnTop(true, 'screen-saver');
-  overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
+  overlay=new BrowserWindow({ width:440,height:expandedHeight,minWidth:380,minHeight:72,frame:false,transparent:true,
+    resizable:true,movable:true,alwaysOnTop:true,skipTaskbar:true,hasShadow:false,focusable:false,fullscreenable:false,show:false,
+    webPreferences:{ preload:join(__dirname,'../preload/index.js'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false } });
+  overlay.setAlwaysOnTop(true,'screen-saver');
+  overlay.setVisibleOnAllWorkspaces(true,{visibleOnFullScreen:true});
+  // Best effort only: ScreenCaptureKit and some capture tools can still see it.
   overlay.setContentProtection(true);
-  overlay.setSkipTaskbar(true);
-  if (process.platform === 'darwin') overlay.setWindowButtonVisibility(false);
-  overlay.setIgnoreMouseEvents(true, { forward: true });
-  overlay.once('ready-to-show', applyGuard);
-  overlay.on('closed', () => { overlay = null; });
+  overlay.setIgnoreMouseEvents(true,{forward:true});
+  overlay.webContents.setWindowOpenHandler(() => ({action:'deny'}));
+  overlay.once('ready-to-show',showOverlay);
+  overlay.on('closed',()=>{overlay=null;});
   if (process.env.ELECTRON_RENDERER_URL) void overlay.loadURL(process.env.ELECTRON_RENDERER_URL);
-  else void overlay.loadFile(join(__dirname, '../renderer/index.html'));
+  else void overlay.loadFile(join(__dirname,'../renderer/index.html'));
 }
 function openSettings(): void {
   if (settings && !settings.isDestroyed()) { settings.show(); settings.focus(); return; }
-  settings = new BrowserWindow({ width: 980, height: 760, minWidth: 760, minHeight: 600, title: 'TAC Interview Agent 设置',
-    webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, nodeIntegration: false, sandbox: true },
-  });
-  settings.on('closed', () => { settings = null; });
-  if (process.env.ELECTRON_RENDERER_URL) void settings.loadURL(new URL('settings.html', process.env.ELECTRON_RENDERER_URL).toString());
-  else void settings.loadFile(join(__dirname, '../renderer/settings.html'));
+  settings=new BrowserWindow({ width:980,height:760,minWidth:760,minHeight:600,title:'TAC Interview Agent 设置',
+    webPreferences:{preload:join(__dirname,'../preload/index.js'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false} });
+  settings.webContents.setWindowOpenHandler(() => ({action:'deny'}));
+  installSystemAudioHandler(settings.webContents.session,settings.webContents);
+  settings.on('close',event=>{if(!quitting){event.preventDefault();settings?.hide();}});
+  settings.on('closed',()=>{settings=null;});
+  if (process.env.ELECTRON_RENDERER_URL) void settings.loadURL(new URL('settings.html',process.env.ELECTRON_RENDERER_URL).toString());
+  else void settings.loadFile(join(__dirname,'../renderer/settings.html'));
 }
 function isTrusted(event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent): boolean {
-  return [overlay, settings].some((win) => !!win && event.sender === win.webContents && event.senderFrame === win.webContents.mainFrame);
+  return [overlay,settings].some(win=>!!win && event.sender===win.webContents && event.senderFrame===win.webContents.mainFrame);
 }
-function isSettings(event: Electron.IpcMainInvokeEvent): boolean {
-  return !!settings && event.sender === settings.webContents && event.senderFrame === settings.webContents.mainFrame;
-}
-ipcMain.on('overlay:mouse-ignore', (event, ignore: unknown) => {
-  if (isTrusted(event) && event.sender === overlay?.webContents && typeof ignore === 'boolean' && (guard.mode === 'unconfirmed' || guard.mode === 'tab-or-window' || (guard.mode === 'full-screen' && guard.presentation === 'revealed')))
-    overlay?.setIgnoreMouseEvents(ignore, ignore ? { forward: true } : undefined);
+function isSettings(event: Electron.IpcMainInvokeEvent): boolean { return !!settings && event.sender===settings.webContents && event.senderFrame===settings.webContents.mainFrame; }
+ipcMain.on('overlay:mouse-ignore',(event,ignore:unknown)=>{if(isTrusted(event) && event.sender===overlay?.webContents && typeof ignore==='boolean'){rendererIgnoresMouse=ignore;syncOverlayMouse();}});
+ipcMain.on('overlay:hide',event=>{if(isTrusted(event)) hideOverlay();});
+ipcMain.on('overlay:quit',event=>{if(isTrusted(event)) app.quit();});
+ipcMain.on('settings:open',event=>{if(isTrusted(event)) openSettings();});
+ipcMain.on('overlay:collapse',(event,collapsed:unknown)=>{
+  if(!isTrusted(event) || typeof collapsed!=='boolean' || !overlay) return;
+  const [width,height]=overlay.getSize();
+  if(collapsed){if(height>80) expandedHeight=height;overlay.setSize(width,72,true);} else overlay.setSize(width,expandedHeight,true);
 });
-ipcMain.on('overlay:rendered', (event, ticket: unknown) => {
-  if (!isTrusted(event) || event.sender !== overlay?.webContents || typeof ticket !== 'number' || !isCurrentReveal(hold,ticket) || guard.presentation !== 'revealed') return;
-  if (pendingRevealTimeout) clearTimeout(pendingRevealTimeout); pendingRevealTimeout=null;
-  const before=performance.now(); overlay?.showInactive(); guard.expandApiMs=(guard.expandApiMs ?? 0)+(performance.now()-before);
-  keyListener?.acknowledge(pendingRevealEventId,'expand'); pendingRevealEventId=undefined;
+ipcMain.handle('window:get-state',event=>{if(!isTrusted(event)) throw new Error('无权访问。');return state();});
+ipcMain.handle('window:set-shortcut',async(event,candidate:unknown)=>{
+  if(!isSettings(event)) throw new Error('请在设置页修改快捷键。');
+  if(typeof candidate!=='string' || !candidate.trim() || candidate.length>80) throw new Error('快捷键格式无效。');
+  const value=candidate.trim();
+  if(!registerShortcut(value)){shortcutError='快捷键暂时无法使用，可能被其他程序占用或格式不正确。';notifyState();return state();}
+  try { await savePreferences({toggleShortcut:value}); } catch { shortcutError='快捷键已启用，但保存失败。';notifyState(); }
+  return state();
 });
-ipcMain.on('overlay:hide', (event) => { if (isTrusted(event)) overlay?.hide(); });
-ipcMain.on('overlay:quit', (event) => { if (isTrusted(event)) app.quit(); });
-ipcMain.on('settings:open', (event) => { if (isTrusted(event)) openSettings(); });
-ipcMain.on('overlay:collapse', (event, collapsed: unknown) => {
-  if (!isTrusted(event) || typeof collapsed !== 'boolean' || !overlay || !['unconfirmed', 'tab-or-window'].includes(guard.mode)) return;
-  const [width, height] = overlay.getSize();
-  if (collapsed) { if (height > 80) expandedHeight = height; overlay.setSize(width, 72, true); }
-  else overlay.setSize(width, expandedHeight, true);
+ipcMain.handle('asr:sign',async event=>{
+  if(!isSettings(event)) throw new Error('请在设置页操作。');
+  const credentials=await getTencentCredentials();
+  return buildTencentWsUrl({...credentials,hotwords:['RAG','Kubernetes','QPS','灰度','微服务','分布式']});
 });
-ipcMain.handle('guard:get', (event) => { if (!isTrusted(event)) throw new Error('无权访问。'); return guard; });
-ipcMain.handle('guard:declare', (event, mode: unknown) => { if (!isSettings(event)) throw new Error('请在设置页面确认。'); return declareShare(mode); });
-ipcMain.handle('guard:reset', async (event) => {
-  if (!isSettings(event)) throw new Error('请在设置页面操作。');
-  const scan = await scanProcesses();
-  const proctored = scan.detectedProcs.some((item) => item.kind === 'proctoring');
-  resetHold();
-  hold=updateHold(hold,{ type: 'mode', mode: proctored ? 'unknown' : 'unconfirmed' });
-  guard = { ...guard, ...scan, mode: proctored ? 'unknown' : 'unconfirmed', presentation: proctored ? 'hidden' : 'edge', riskLevel: proctored ? 'high' : 'unknown', reason: proctored ? '检测到已知监考进程，已停止显示内容。' : undefined };
-  applyGuard();
-  return guard;
+ipcMain.on('session:status',(event,value:unknown)=>{
+  if(!isTrusted(event) || event.sender!==settings?.webContents || !value || typeof value!=='object') return;
+  const item=value as Record<string,unknown>;
+  if(typeof item.phase!=='string' || !['idle','testing','connecting','listening','paused','reconnecting','stopped','failed'].includes(item.phase) || typeof item.level!=='number' || !Number.isFinite(item.level)) return;
+  if(overlay && !overlay.isDestroyed()) overlay.webContents.send('session:status',{phase:item.phase,level:Math.min(1,Math.max(0,item.level))});
 });
-ipcMain.handle('listener:start', (event) => { if (!isSettings(event)) throw new Error('仅设置页可操作。'); keyListener?.start(); return keyListener?.getState(); });
-ipcMain.handle('listener:stop', (event) => { if (!isSettings(event)) throw new Error('仅设置页可操作。'); collapseHold(true); keyListener?.stop(); return keyListener?.getState(); });
-const runFile=promisify(execFile);
-ipcMain.handle('listener:permission', async (event, action: unknown) => {
-  if (!isSettings(event) || process.platform !== 'darwin' || (action !== 'check' && action !== 'request')) throw new Error('无权操作。');
-  const exe=listenerPath(app.isPackaged,process.resourcesPath,app.getAppPath(),process.platform);
-  const result=await runFile(exe,[action === 'check' ? '--check-permission' : '--request-permission'],{ timeout: 15_000, maxBuffer: 4096 });
-  const status=result.stdout.trim();
-  return ['granted','denied','unknown','requested'].includes(status) ? status : 'unknown';
+ipcMain.on('session:transcript',(event,value:unknown)=>{
+  if(!isTrusted(event) || event.sender!==settings?.webContents || !value || typeof value!=='object') return;
+  const row=value as Record<string,unknown>;
+  if(typeof row.text!=='string' || row.text.length>10000 || typeof row.isFinal!=='boolean' || typeof row.sentenceIndex!=='number') return;
+  if(overlay && !overlay.isDestroyed()) overlay.webContents.send('session:transcript',{text:row.text,isFinal:row.isFinal,sentenceIndex:row.sentenceIndex});
 });
-ipcMain.handle('listener:open-permission-settings', async (event) => {
-  if (!isSettings(event) || process.platform !== 'darwin') throw new Error('无权操作。');
-  await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent');
+ipcMain.handle('llm:start',(event,value:unknown)=>{
+  if(!isSettings(event) || !value || typeof value!=='object') throw new Error('请求格式无效。');
+  const req=value as Record<string,unknown>;
+  if(typeof req.question!=='string' || !req.question.trim() || req.question.length>4000 || typeof req.system!=='string' || req.system.length>16000 || typeof req.user!=='string' || req.user.length>16000 || typeof req.remoteConsent!=='boolean') throw new Error('请求格式无效。');
+  if(!Array.isArray(req.refs) || req.refs.length>4 || !req.refs.every(value=>typeof value==='string' && value.length<=300)) throw new Error('引用格式无效。');
+  return answers.start({question:req.question,system:req.system,user:req.user,remoteConsent:req.remoteConsent,refs:req.refs as string[]});
 });
-ipcMain.handle('listener:restart-app', (event) => {
-  if (!isSettings(event) || process.platform !== 'darwin') throw new Error('无权操作。');
-  app.relaunch(); app.quit();
+ipcMain.handle('llm:cancel',event=>{if(!isTrusted(event)) throw new Error('无权操作。');answers.cancel();});
+ipcMain.handle('llm:test',async(event,consent:unknown)=>{
+  if(!isSettings(event) || typeof consent!=='boolean') throw new Error('请求格式无效。');
+  const {provider,remote}=await loadProvider();
+  if(remote && !consent) throw new Error('请先确认问题与简历片段将发送到模型服务商。');
+  return provider.test();
 });
-ipcMain.handle('credentials:get', (event) => { if (!isSettings(event)) throw new Error('请在设置页面操作。'); return getCredentials(); });
-ipcMain.handle('credentials:save', (event, values: unknown) => { if (!isSettings(event)) throw new Error('请在设置页面操作。'); return saveCredentials(values); });
-function updateTray(): void {
-  if (!tray) return;
-  const label=guard.listener.status === 'ready' ? '按键监听运行中' : `按键监听：${guard.listener.reason ?? '未启用'}`;
-  tray.setToolTip(`TAC Interview Agent · ${label}`);
-  tray.setContextMenu(Menu.buildFromTemplate([
-    { label, enabled: false }, { label: '设置与共享范围', click: openSettings },
-    { label: '显示悬浮窗', click: () => { if (guard.mode === 'tab-or-window' || guard.mode === 'unconfirmed') overlay?.showInactive(); else openSettings(); } },
-    { label: '隐藏悬浮窗', click: () => overlay?.hide() }, { type: 'separator' }, { label: '退出', click: () => app.quit() },
-  ]));
-}
+ipcMain.handle('resume:get',event=>{if(!isSettings(event)) throw new Error('请在设置页操作。');return loadResume();});
+ipcMain.handle('resume:save',(event,value:unknown)=>{if(!isSettings(event)) throw new Error('请在设置页操作。');return saveResume(value);});
+ipcMain.handle('credentials:get',event=>{if(!isSettings(event)) throw new Error('请在设置页操作。');return getCredentials();});
+ipcMain.handle('credentials:save',(event,values:unknown)=>{if(!isSettings(event)) throw new Error('请在设置页操作。');return saveCredentials(values);});
 function createTray(): void {
-  const icon = nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAnUlEQVR4nO2XQQ7CIBBF//z0Eno5XemZdGUvZ49RVyQmMoQYmL/ovBXpUN4nwwIAMdYqni63fYRkW5+ux2aKe4IwSu6tzSi552CkvOYixDB694XiJMQsreL79RgmOl/v1e+EGB4+wPJP37zz0ZqfLfAgxDADIFsghhkAYqwMom9F5YpOiGHP62U03y56hQj5T4DZIWprW+uHiMepnA/c4DLYhpabSAAAAABJRU5ErkJggg==');
-  tray = new Tray(icon);
-  tray.setToolTip('TAC Interview Agent');
-  updateTray();
-  tray.on('click', openSettings);
+  const icon=nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAnUlEQVR4nO2XQQ7CIBBF//z0Eno5XemZdGUvZ49RVyQmMoQYmL/ovBXpUN4nwwIAMdYqni63fYRkW5+ux2aKe4IwSu6tzSi552CkvOYixDB694XiJMQsreL79RgmOl/v1e+EGB4+wPJP37zz0ZqfLfAgxDADIFsghhkAYqwMom9F5YpOiGHP62U03y56hQj5T4DZIWprW+uHiMepnA/c4DLYhpabSAAAAABJRU5ErkJggg==');
+  tray=new Tray(icon); tray.setToolTip('TAC Interview Agent');
+  tray.setContextMenu(Menu.buildFromTemplate([{label:'设置',click:openSettings},{label:'显示悬浮窗',click:showOverlay},{label:'隐藏悬浮窗',click:hideOverlay},{type:'separator'},{label:'退出',click:()=>app.quit()}]));
+  tray.on('click',toggleOverlay);
 }
-const hasInstanceLock = app.requestSingleInstanceLock();
-if (!hasInstanceLock) {
-  app.quit();
-} else {
-  app.on('second-instance', () => { if (app.isReady()) openSettings(); });
-  app.whenReady().then(() => {
-    if (process.platform === 'darwin') { app.dock?.hide(); app.setActivationPolicy('accessory'); }
-    createListener(); createOverlay(); createTray(); openSettings();
-    powerMonitor.on('lock-screen', resetHold); powerMonitor.on('unlock-screen', resetHold);
-    powerMonitor.on('suspend', resetHold); powerMonitor.on('resume', resetHold);
-    screen.on('display-removed', () => { resetHold(); if (normalBounds) { const area=screen.getPrimaryDisplay().workArea; normalBounds={ x: area.x + Math.max(0,area.width-normalBounds.width), y: area.y, width: Math.min(area.width,normalBounds.width), height: Math.min(area.height,normalBounds.height) }; } applyGuard(); });
-    screen.on('display-metrics-changed', () => { resetHold(); applyGuard(); });
-    app.on('before-quit', () => { keyListener?.stop(); });
-    void refreshScan();
-    setInterval(() => { void refreshScan(); }, 10 * 60_000).unref();
-    app.on('activate', openSettings);
+const hasLock=app.requestSingleInstanceLock();
+if(!hasLock) app.quit();
+else {
+  app.on('second-instance',()=>{if(app.isReady()) {showOverlay();openSettings();}});
+  app.whenReady().then(async()=>{
+    if(process.platform==='darwin') {app.dock?.hide();app.setActivationPolicy('accessory');}
+    createOverlay();createTray();openSettings();
+    mousePoll=setInterval(syncOverlayMouse,30);
+    try { shortcut=(await readPreferences()).toggleShortcut; } catch { shortcutError='无法读取快捷键设置，已尝试使用默认快捷键。'; }
+    if(!registerShortcut(shortcut)) {shortcutError='快捷键暂时无法使用，可能被其他程序占用或格式不正确。';notifyState();}
+    app.on('activate',openSettings);
   });
-  app.on('window-all-closed', () => { /* Keep the tray available until explicit quit. */ });
+  app.on('before-quit',()=>{quitting=true;if(mousePoll)clearInterval(mousePoll);answers.cancel();globalShortcut.unregisterAll();});
+  app.on('window-all-closed',()=>{/* Tray stays available. */});
 }

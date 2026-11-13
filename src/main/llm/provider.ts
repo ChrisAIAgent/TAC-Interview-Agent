@@ -21,8 +21,10 @@ export interface LlmProvider {
 export type FetchLike = typeof fetch
 
 export class LlmError extends Error {
-  constructor(public readonly code: 'LLM_AUTH' | 'LLM_RATE_LIMIT' | 'LLM_HTTP' | 'LLM_PROTOCOL' | 'LLM_TIMEOUT', message: string) {
+  readonly code: 'LLM_AUTH' | 'LLM_RATE_LIMIT' | 'LLM_HTTP' | 'LLM_PROTOCOL' | 'LLM_TIMEOUT'
+  constructor(code: 'LLM_AUTH' | 'LLM_RATE_LIMIT' | 'LLM_HTTP' | 'LLM_PROTOCOL' | 'LLM_TIMEOUT', message: string) {
     super(message)
+    this.code = code
     this.name = 'LlmError'
   }
 }

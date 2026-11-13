@@ -7,13 +7,19 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test tests/*.test.mjs",
     "preview": "electron-vite preview",
-    "dist": "npm run build:native && npm run build && electron-builder",
+    "dist": "npm run build && electron-builder",
     "build:native": "node scripts/build-native.cjs"
   },
   "dependencies": {
+    "katex": "^0.19.1",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
@@ -37,21 +43,14 @@
     },
     "mac": {
       "target": "dmg",
-      "binaries": [
-        "Contents/Resources/keylistener/keylistener-darwin"
-      ],
-      "hardenedRuntime": true
-    },
-    "extraResources": [
-      {
-        "from": "resources/keylistener",
-        "to": "keylistener",
-        "filter": [
-          "keylistener-win32.exe",
-          "keylistener-darwin"
-        ]
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSAudioCaptureUsageDescription": "用于采集系统播放的面试声音并实时转写。",
+        "NSMicrophoneUsageDescription": "当你主动使用麦克风功能时，用于采集你的语音。"
       }
-    ]
+    }
   },
   "allowScripts": {
     "electron@33.4.11": true,

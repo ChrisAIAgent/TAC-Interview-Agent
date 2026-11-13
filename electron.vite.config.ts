@@ -7,6 +7,6 @@ export default defineConfig({
   preload: { plugins: [externalizeDepsPlugin()] },
   renderer: {
     plugins: [react()],
-    build: { rollupOptions: { input: { index: resolve(__dirname, 'src/renderer/index.html'), settings: resolve(__dirname, 'src/renderer/settings.html') } } },
+    build: { assetsInlineLimit: 0, rollupOptions: { input: { index: resolve(__dirname, 'src/renderer/index.html'), settings: resolve(__dirname, 'src/renderer/settings.html') } } },
   },
 });

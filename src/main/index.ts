@@ -1,5 +1,5 @@
 import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, screen, Tray } from 'electron';
-import { insideDragBar } from './platform/overlay-hit-test';
+import { OverlayResizeGesture } from './platform/overlay-resize';
 import { join } from 'node:path';
 import { getCredentials, saveCredentials, getTencentCredentials, getLlmConfiguration } from './store/credentials';
 import { OpenAICompatProvider } from './llm/openai-compat';
@@ -9,6 +9,9 @@ import { buildTencentWsUrl } from './asr/tencent-sign';
 import { installSystemAudioHandler } from './platform/systemAudio';
 import { loadResume, saveResume } from './store/resume';
 import { DEFAULT_TOGGLE_SHORTCUT, readPreferences, savePreferences } from './store/preferences';
+import { classifyUtterance } from './llm/classify';
+import { searchPublicTopic } from './llm/public-search';
+import { PUBLIC_SEARCH_QUERIES, type PublicSearchTopic } from '../shared/public-search';
 
 interface WindowState { shortcut: string; shortcutError: string | null; visible: boolean }
 let overlay: BrowserWindow | null=null;
@@ -19,17 +22,21 @@ let shortcutError: string | null=null;
 let registeredShortcut: string | null=null;
 let expandedHeight=360;
 let quitting=false;
-let inDragBar=false;
-let rendererIgnoresMouse=true;
-let currentIgnore=true;
-let mousePoll:ReturnType<typeof setInterval>|null=null;
-function syncOverlayMouse():void {
-  if(!overlay || overlay.isDestroyed() || !overlay.isVisible()) return;
-  const inside=insideDragBar(screen.getCursorScreenPoint(),overlay.getBounds());
-  if(inDragBar && !inside) rendererIgnoresMouse=true;
-  inDragBar=inside;
-  const ignore=!inside && rendererIgnoresMouse;
-  if(ignore!==currentIgnore){overlay.setIgnoreMouseEvents(ignore,ignore?{forward:true}:undefined);currentIgnore=ignore;}
+let clickThrough=false;
+const resizeGesture=new OverlayResizeGesture();
+function beginResize(event:Electron.IpcMainEvent):void {
+  if(!isTrusted(event) || event.sender!==overlay?.webContents || !overlay || overlay.isDestroyed()) return;
+  resizeGesture.begin(screen.getCursorScreenPoint(),overlay.getBounds());
+}
+function updateResize(event:Electron.IpcMainEvent,buttons:unknown):void {
+  if(!isTrusted(event) || event.sender!==overlay?.webContents || !overlay || overlay.isDestroyed() || !Number.isInteger(buttons) || (buttons as number)<0 || (buttons as number)>31) return;
+  const point=screen.getCursorScreenPoint();
+  const size=resizeGesture.update(point,buttons as number,screen.getDisplayNearestPoint(point).workArea);
+  if(size) { const [width,height]=overlay.getSize(); if(size.width!==width || size.height!==height) overlay.setSize(size.width,size.height,false); }
+}
+function endResize(event:Electron.IpcMainEvent):void {
+  if(!isTrusted(event) || event.sender!==overlay?.webContents) return;
+  resizeGesture.end();
 }
 async function loadProvider(){
   const cfg=await getLlmConfiguration();
@@ -37,6 +44,7 @@ async function loadProvider(){
     ? {provider:new OllamaProvider(cfg.model,cfg.baseUrl),remote:false}
     : {provider:new OpenAICompatProvider(cfg.model,cfg.apiKey,cfg.baseUrl),remote:true};
 }
+let classificationController:AbortController|null=null;
 function publishAnswer(value:AnswerUpdate):void {
   for(const win of [overlay,settings]) if(win && !win.isDestroyed()) win.webContents.send('llm:answer',value);
 }
@@ -46,8 +54,13 @@ function state(): WindowState { return { shortcut, shortcutError, visible: !!ove
 function notifyState(): void {
   for (const win of [overlay,settings]) if (win && !win.isDestroyed()) win.webContents.send('window:state',state());
 }
-function showOverlay(): void { if (overlay && !overlay.isDestroyed()) { overlay.showInactive(); notifyState(); } }
-function hideOverlay(): void { if (overlay && !overlay.isDestroyed()) { overlay.hide(); notifyState(); } }
+function showOverlay(): void {
+  if (!overlay || overlay.isDestroyed()) return;
+  resizeGesture.end();
+  overlay.setIgnoreMouseEvents(clickThrough);
+  overlay.showInactive();notifyState();
+}
+function hideOverlay(): void { if (overlay && !overlay.isDestroyed()) { resizeGesture.end();overlay.hide(); notifyState(); } }
 function toggleOverlay(): void { if (overlay?.isVisible()) hideOverlay(); else showOverlay(); }
 function registerShortcut(candidate: string): boolean {
   try {
@@ -59,15 +72,16 @@ function registerShortcut(candidate: string): boolean {
 }
 function createOverlay(): void {
   overlay=new BrowserWindow({ width:440,height:expandedHeight,minWidth:380,minHeight:72,frame:false,transparent:true,
-    resizable:true,movable:true,alwaysOnTop:true,skipTaskbar:true,hasShadow:false,focusable:false,fullscreenable:false,show:false,
+    resizable:true,movable:true,alwaysOnTop:true,skipTaskbar:true,hasShadow:false,focusable:true,fullscreenable:false,show:false,
     webPreferences:{ preload:join(__dirname,'../preload/index.js'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false } });
   overlay.setAlwaysOnTop(true,'screen-saver');
   overlay.setVisibleOnAllWorkspaces(true,{visibleOnFullScreen:true});
   // Best effort only: ScreenCaptureKit and some capture tools can still see it.
   overlay.setContentProtection(true);
-  overlay.setIgnoreMouseEvents(true,{forward:true});
+  overlay.setIgnoreMouseEvents(clickThrough);
   overlay.webContents.setWindowOpenHandler(() => ({action:'deny'}));
   overlay.once('ready-to-show',showOverlay);
+  overlay.on('blur',()=>resizeGesture.end());
   overlay.on('closed',()=>{overlay=null;});
   if (process.env.ELECTRON_RENDERER_URL) void overlay.loadURL(process.env.ELECTRON_RENDERER_URL);
   else void overlay.loadFile(join(__dirname,'../renderer/index.html'));
@@ -87,7 +101,9 @@ function isTrusted(event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent): 
   return [overlay,settings].some(win=>!!win && event.sender===win.webContents && event.senderFrame===win.webContents.mainFrame);
 }
 function isSettings(event: Electron.IpcMainInvokeEvent): boolean { return !!settings && event.sender===settings.webContents && event.senderFrame===settings.webContents.mainFrame; }
-ipcMain.on('overlay:mouse-ignore',(event,ignore:unknown)=>{if(isTrusted(event) && event.sender===overlay?.webContents && typeof ignore==='boolean'){rendererIgnoresMouse=ignore;syncOverlayMouse();}});
+ipcMain.on('overlay:resize-start',beginResize);
+ipcMain.on('overlay:resize-update',updateResize);
+ipcMain.on('overlay:resize-end',endResize);
 ipcMain.on('overlay:hide',event=>{if(isTrusted(event)) hideOverlay();});
 ipcMain.on('overlay:quit',event=>{if(isTrusted(event)) app.quit();});
 ipcMain.on('settings:open',event=>{if(isTrusted(event)) openSettings();});
@@ -122,6 +138,10 @@ ipcMain.on('session:transcript',(event,value:unknown)=>{
   if(typeof row.text!=='string' || row.text.length>10000 || typeof row.isFinal!=='boolean' || typeof row.sentenceIndex!=='number') return;
   if(overlay && !overlay.isDestroyed()) overlay.webContents.send('session:transcript',{text:row.text,isFinal:row.isFinal,sentenceIndex:row.sentenceIndex});
 });
+ipcMain.on('session:auto-status',(event,value:unknown)=>{
+  if(!isTrusted(event)||event.sender!==settings?.webContents||typeof value!=='string'||value.length>180)return;
+  if(overlay&&!overlay.isDestroyed())overlay.webContents.send('session:auto-status',value);
+});
 ipcMain.handle('llm:start',(event,value:unknown)=>{
   if(!isSettings(event) || !value || typeof value!=='object') throw new Error('请求格式无效。');
   const req=value as Record<string,unknown>;
@@ -136,6 +156,22 @@ ipcMain.handle('llm:test',async(event,consent:unknown)=>{
   if(remote && !consent) throw new Error('请先确认问题与简历片段将发送到模型服务商。');
   return provider.test();
 });
+ipcMain.handle('llm:classify',async(event,input:unknown)=>{
+  if(!isSettings(event) || !input || typeof input!=='object') throw new Error('请求格式无效。');
+  const value=input as Record<string,unknown>;
+  if(typeof value.utterance!=='string'||!value.utterance.trim()||value.utterance.length>1500||typeof value.context!=='string'||value.context.length>5000||typeof value.consent!=='boolean') throw new Error('请求格式无效。');
+  const {provider,remote}=await loadProvider();
+  if(remote&&!value.consent) throw new Error('请先确认模型数据使用。');
+  classificationController?.abort();const controller=new AbortController();classificationController=controller;
+  try {const cfg=await getLlmConfiguration();const hostname=new URL(cfg.baseUrl).hostname;const isAli=hostname==='dashscope.aliyuncs.com'||/\.cn-beijing\.maas\.aliyuncs\.com$/i.test(hostname);return await classifyUtterance(provider,value.utterance,value.context,controller.signal,isAli);}
+  finally {if(classificationController===controller)classificationController=null;}
+});
+ipcMain.handle('llm:public-search',async(event,topic:unknown,consent:unknown)=>{
+  if(!isSettings(event)||typeof topic!=='string'||!Object.hasOwn(PUBLIC_SEARCH_QUERIES,topic)||consent!==true)throw new Error('联网搜索未开启或主题无效。');
+  const cfg=await getLlmConfiguration();
+  if(cfg.provider!=='openai-compat') throw new Error('当前模型服务不支持联网搜索。');
+  return searchPublicTopic(cfg,topic as PublicSearchTopic);
+});
 ipcMain.handle('resume:get',event=>{if(!isSettings(event)) throw new Error('请在设置页操作。');return loadResume();});
 ipcMain.handle('resume:save',(event,value:unknown)=>{if(!isSettings(event)) throw new Error('请在设置页操作。');return saveResume(value);});
 ipcMain.handle('credentials:get',event=>{if(!isSettings(event)) throw new Error('请在设置页操作。');return getCredentials();});
@@ -143,7 +179,7 @@ ipcMain.handle('credentials:save',(event,values:unknown)=>{if(!isSettings(event)
 function createTray(): void {
   const icon=nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAnUlEQVR4nO2XQQ7CIBBF//z0Eno5XemZdGUvZ49RVyQmMoQYmL/ovBXpUN4nwwIAMdYqni63fYRkW5+ux2aKe4IwSu6tzSi552CkvOYixDB694XiJMQsreL79RgmOl/v1e+EGB4+wPJP37zz0ZqfLfAgxDADIFsghhkAYqwMom9F5YpOiGHP62U03y56hQj5T4DZIWprW+uHiMepnA/c4DLYhpabSAAAAABJRU5ErkJggg==');
   tray=new Tray(icon); tray.setToolTip('TAC Interview Agent');
-  tray.setContextMenu(Menu.buildFromTemplate([{label:'设置',click:openSettings},{label:'显示悬浮窗',click:showOverlay},{label:'隐藏悬浮窗',click:hideOverlay},{type:'separator'},{label:'退出',click:()=>app.quit()}]));
+  tray.setContextMenu(Menu.buildFromTemplate([{label:'设置',click:openSettings},{label:'显示悬浮窗',click:showOverlay},{label:'隐藏悬浮窗',click:hideOverlay},{label:'鼠标穿透悬浮窗',type:'checkbox',checked:clickThrough,click:item=>{clickThrough=item.checked;resizeGesture.end();if(overlay && !overlay.isDestroyed())overlay.setIgnoreMouseEvents(clickThrough);}},{type:'separator'},{label:'退出',click:()=>app.quit()}]));
   tray.on('click',toggleOverlay);
 }
 const hasLock=app.requestSingleInstanceLock();
@@ -153,11 +189,10 @@ else {
   app.whenReady().then(async()=>{
     if(process.platform==='darwin') {app.dock?.hide();app.setActivationPolicy('accessory');}
     createOverlay();createTray();openSettings();
-    mousePoll=setInterval(syncOverlayMouse,30);
     try { shortcut=(await readPreferences()).toggleShortcut; } catch { shortcutError='无法读取快捷键设置，已尝试使用默认快捷键。'; }
     if(!registerShortcut(shortcut)) {shortcutError='快捷键暂时无法使用，可能被其他程序占用或格式不正确。';notifyState();}
     app.on('activate',openSettings);
   });
-  app.on('before-quit',()=>{quitting=true;if(mousePoll)clearInterval(mousePoll);answers.cancel();globalShortcut.unregisterAll();});
+  app.on('before-quit',()=>{quitting=true;resizeGesture.end();classificationController?.abort();answers.cancel();globalShortcut.unregisterAll();});
   app.on('window-all-closed',()=>{/* Tray stays available. */});
 }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { startSystemAudio, SystemAudioCaptureError } from '../src/renderer/src/audio/capture.ts';
+import { startSystemAudio, startMicrophoneAudio, SystemAudioCaptureError } from '../src/renderer/src/audio/capture.ts';
 
 function replaceGlobal(t, name, value) {
   const previous = Object.getOwnPropertyDescriptor(globalThis, name);
@@ -29,6 +29,33 @@ function stream(audio, video) {
     getTracks: () => audio ? [audio, video] : [video]
   };
 }
+
+test('microphone capture requests audio only and rejects an ended input', async t => {
+  const audio = track('ended'); let constraints;
+  replaceGlobal(t, 'navigator', { mediaDevices: { getUserMedia: async value => { constraints = value; return { getAudioTracks: () => [audio], getVideoTracks: () => [], getTracks: () => [audio] }; } } });
+  await assert.rejects(startMicrophoneAudio({ workletUrl:'test.js', onPacket() {} }), /麦克风音轨/);
+  assert.equal(constraints.video, false);
+  assert.equal(constraints.audio.echoCancellation, true);
+  assert.equal(audio.stopCount, 1);
+});
+
+test('microphone forwards audio and releases the input when stopped', async t => {
+  const audio = track(); let worklet; let context;
+  replaceGlobal(t, 'navigator', { mediaDevices: { getUserMedia: async () => ({ getAudioTracks: () => [audio], getVideoTracks: () => [], getTracks: () => [audio] }) } });
+  class Node { connect() {} disconnect() {} }
+  class FakeContext {
+    sampleRate=16000; state='running'; destination={}; audioWorklet={ addModule: async()=>{} };
+    constructor(){context=this} createMediaStreamSource(){return new Node()} createGain(){return Object.assign(new Node(),{gain:{value:1}})}
+    async resume(){} async close(){this.state='closed'}
+  }
+  class FakeWorklet extends Node { port={onmessage:null}; constructor(){super();worklet=this} }
+  replaceGlobal(t,'AudioContext',FakeContext); replaceGlobal(t,'AudioWorkletNode',FakeWorklet);
+  const packets=[]; const handle=await startMicrophoneAudio({workletUrl:'test.js',onPacket:packet=>packets.push(packet)});
+  worklet.port.onmessage({data:{pcm:new ArrayBuffer(3200),rms:0.3}});
+  assert.equal(packets.length,1);
+  await handle.stop(); await handle.stop();
+  assert.equal(audio.stopCount,1); assert.equal(context.state,'closed');
+});
 
 test('an absent or already-ended audio track fails explicitly and releases video', async t => {
   let currentStream;

@@ -30,9 +30,9 @@ export function detectQuestion(text: string, isFinal: boolean, recentQuestions: 
   const normalized = normalizeQuestion(text);
   const result = (reason: DetectionReason): QuestionDetection => ({ isQuestion: reason === 'question', normalized, reason });
   if (!isFinal) return result('partial');
-  if (Array.from(normalized).length < 6) return result('too_short');
-  if (confirmationPrefixes.some((prefix) => normalized.startsWith(prefix))) return result('confirmation');
-  if (!/[?？]\s*$/u.test(text) && !questionWords.some((word) => text.includes(word))) return result('no_question_marker');
+  if (confirmationPrefixes.includes(normalized)) return result('confirmation');
+  if (Array.from(normalized).length < 2) return result('too_short');
+  if (!/[?？]\s*$/u.test(text) && !questionWords.some((word) => text.includes(word)) && !/[呢吗么][。！!\s]*$/u.test(text)) return result('no_question_marker');
   if (recentQuestions.slice(-5).some((question) => questionSimilarity(text, question) > 0.85)) return result('duplicate');
   return result('question');
 }

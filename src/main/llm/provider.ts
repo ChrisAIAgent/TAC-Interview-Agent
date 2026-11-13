@@ -3,6 +3,7 @@ export interface ChatRequest {
   messages: { role: 'user' | 'assistant'; content: string }[]
   temperature?: number
   maxTokens?: number
+  disableThinking?: boolean
 }
 
 export interface ChatChunk {

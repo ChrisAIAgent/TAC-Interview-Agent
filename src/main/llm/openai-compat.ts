@@ -12,7 +12,7 @@ export class OpenAICompatProvider implements LlmProvider {
     try {
       const response = await life.fetch(this.request, `${this.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.apiKey}` },
-        body: JSON.stringify({ model: this.model, stream: true, messages: [{ role: 'system', content: req.system }, ...req.messages], temperature: req.temperature ?? 0.4, max_tokens: req.maxTokens ?? 400, top_p: 0.9 })
+        body: JSON.stringify({ model: this.model, stream: true, messages: [{ role: 'system', content: req.system }, ...req.messages], temperature: req.temperature ?? 0.4, max_tokens: req.maxTokens ?? 400, top_p: 0.9, ...(req.disableThinking ? { enable_thinking: false } : {}) })
       })
       let fields: string[] = []
       for await (const line of readLines(response.body!)) {

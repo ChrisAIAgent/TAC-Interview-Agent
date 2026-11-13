@@ -19,3 +19,6 @@ TAC Marketing/
 .env
 .env.*
 credentials*.json
+
+# 本地联调验证残留（脚本与结果，不入库）
+.verify-live-model*

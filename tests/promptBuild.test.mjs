@@ -16,8 +16,8 @@ function load(name) {
   const module = { exports: {} };
   cache.set(filename, module);
   const localRequire = (request) => {
-    if (!request.startsWith('./')) throw new Error(`Unexpected runtime dependency: ${request}`);
-    return load(request.slice(2));
+    if (!request.startsWith('./') && !request.startsWith('../')) throw new Error(`Unexpected runtime dependency: ${request}`);
+    return load(request.startsWith('./') ? request.slice(2) : request);
   };
   new Function('exports', 'require', 'module', js)(module.exports, localRequire, module);
   return module.exports;
@@ -66,4 +66,11 @@ test('prompt uses only last three turns, model settings and source refs', () => 
   assert.match(result.messages[0].content, /question-4/);
   assert.ok(result.resumeRefs.includes('project:pay:contribution'));
   assert.deepEqual([result.temperature,result.maxTokens,result.topP,result.stream], [0.4,400,0.9,true]);
+});
+test('follow-up context distinguishes actual microphone speech from generated advice', () => {
+  const speech = [{ source: 'system', text: '介绍一下项目' }, { source: 'microphone', text: '我负责测试工作' }, { source: 'system', text: '那后来呢？' }];
+  const result = buildPrompt(resume, { id:'c', title:'精简', body:'简短回答' }, '那后来呢？', [{ question:'介绍一下项目', answer:'我负责架构设计' }], speech);
+  assert.match(result.messages[0].content, /我的麦克风：我负责测试工作/);
+  assert.match(result.messages[0].content, /先前生成的建议（并非实际回答）/);
+  assert.match(result.system, /建议不代表候选人实际说过的话/);
 });

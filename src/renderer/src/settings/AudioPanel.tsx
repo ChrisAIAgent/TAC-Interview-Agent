@@ -2,10 +2,24 @@ import React, { useEffect, useRef, useState } from 'react'
 import workletUrl from '../audio/worklet.js?url'
 import { startSystemAudio, SystemAudioCaptureError, type CaptureHandle } from '../audio/capture'
 import { TencentAsr, type TencentAsrError } from '../asr/tencent'
+import { MicrophonePanel } from './MicrophonePanel'
 
 type Phase='idle'|'testing'|'connecting'|'listening'|'paused'|'reconnecting'|'stopped'|'failed'
 interface Row {text:string;isFinal:boolean}
-export function AudioPanel({credentialsReady,onFinal}:{credentialsReady:boolean;onFinal:(text:string)=>void}):React.JSX.Element {
+type CredentialKey='tencentAppId'|'tencentSecretId'|'tencentSecretKey'
+type CredentialValues=Record<CredentialKey,string>
+type CredentialSummary=Partial<Record<CredentialKey,string>>|null
+interface AudioPanelProps {
+  credentialsReady:boolean
+  credentialSummary:CredentialSummary
+  credentialValues:CredentialValues
+  onCredentialChange:(key:CredentialKey,value:string)=>void
+  onSaveCredentials:()=>void
+  savingCredentials:boolean
+  onFinal:(source:'system'|'microphone',text:string)=>void
+  onReset:()=>void
+}
+export function AudioPanel({credentialsReady,credentialSummary,credentialValues,onCredentialChange,onSaveCredentials,savingCredentials,onFinal,onReset}:AudioPanelProps):React.JSX.Element {
   const [consent,setConsent]=useState(false)
   const [phase,setPhase]=useState<Phase>('idle')
   const [message,setMessage]=useState('')
@@ -48,7 +62,7 @@ export function AudioPanel({credentialsReady,onFinal}:{credentialsReady:boolean;
   async function begin():Promise<void> {
     if (!consent || !credentialsReady || engine.current) return
     const current=++run.current
-    setMessage('');setRows([]);lastFrame.current=null;captureStartedAt.current=null;marks.current=[];audioMs.current=0;sent.current=[];setDrops(0);setDecodeErrors(0);setLatency(null)
+    setMessage('');setRows([]);onReset();lastFrame.current=null;captureStartedAt.current=null;marks.current=[];audioMs.current=0;sent.current=[];setDrops(0);setDecodeErrors(0);setLatency(null)
     changePhase('connecting')
     const asr=new TencentAsr({sign:()=>window.interviewAPI.signTencent(),
       onResult:line=>{
@@ -58,7 +72,7 @@ export function AudioPanel({credentialsReady,onFinal}:{credentialsReady:boolean;
           return next.slice(-200)
         })
         if(line.text) window.interviewAPI.publishTranscript({text:line.text,isFinal:line.isFinal,sentenceIndex:line.sentenceIndex})
-        if(line.isFinal && line.text) onFinal(line.text)
+        if(line.isFinal && line.text) onFinal('system',line.text)
         if(line.isFinal){const mark=marks.current.find(item=>item.endMs>=line.endMs);if(mark)setLatency(Math.max(0,Math.round(performance.now()-mark.at)))}
       },
       onError:(error:TencentAsrError)=>setMessage(error.message),
@@ -104,8 +118,17 @@ export function AudioPanel({credentialsReady,onFinal}:{credentialsReady:boolean;
     catch (error) {if(current===run.current){setMessage(error instanceof SystemAudioCaptureError ? error.message : '系统音频检测失败，请检查权限和设备。');changePhase('failed')}}
   }
   const busy=['testing','connecting','listening','reconnecting','paused'].includes(phase)
-  return <section className="card"><div className="section-heading"><div><span className="number">03 / LIVE TRANSCRIPTION</span><h2>实时转写</h2></div><span className="badge">{phase}</span></div>
-    <p className="muted">系统播放的声音将实时发送至腾讯云进行语音识别；音频只在内存处理，不保存为文件。请在得到必要授权后使用。</p>
+  return <section className="card" id="step-audio"><div className="section-heading"><div><span className="number">OPTIONAL / LIVE TRANSCRIPTION</span><h2>实时语音转写</h2></div><span className="badge">{credentialsReady?'凭证已配置':'可稍后设置'}</span></div>
+    <p className="muted">这是可选功能。开启后，系统播放的声音会实时发送至腾讯云识别；音频只在内存处理，不写入文件。你可以先用上方“手动试答”，之后再配置语音。</p>
+    <details className="credential-disclosure"><summary>{credentialsReady?'更换腾讯云语音识别凭证':'设置腾讯云语音识别凭证'}</summary>
+      <p className="muted">填入腾讯云 ASR 的 AppId、SecretId 和 SecretKey。输入留空会保留已保存的值；凭证使用系统安全存储。</p>
+      <div className="form-grid">
+        <label>腾讯云 AppId<input type="password" autoComplete="off" placeholder={credentialSummary?.tencentAppId||'输入后保存'} value={credentialValues.tencentAppId} onChange={event=>onCredentialChange('tencentAppId',event.target.value)}/></label>
+        <label>腾讯云 SecretId<input type="password" autoComplete="off" placeholder={credentialSummary?.tencentSecretId||'输入后保存'} value={credentialValues.tencentSecretId} onChange={event=>onCredentialChange('tencentSecretId',event.target.value)}/></label>
+        <label className="wide">腾讯云 SecretKey<input type="password" autoComplete="off" placeholder={credentialSummary?.tencentSecretKey||'输入后保存'} value={credentialValues.tencentSecretKey} onChange={event=>onCredentialChange('tencentSecretKey',event.target.value)}/></label>
+      </div>
+      <button type="button" disabled={savingCredentials} onClick={onSaveCredentials}>{savingCredentials?'正在保存…':'保存语音识别凭证'}</button>
+    </details>
     <label className="consent"><input type="checkbox" checked={consent} disabled={busy} onChange={event=>setConsent(event.target.checked)}/> 我了解本次音频会发送至腾讯云</label>
     {!credentialsReady&&<p className="warning">请先在上方保存腾讯云 AppId、SecretId 和 SecretKey。</p>}
     {message&&<p className="warning" role="alert">{message}</p>}
@@ -121,5 +144,6 @@ export function AudioPanel({credentialsReady,onFinal}:{credentialsReady:boolean;
     {(phase==='testing'||phase==='listening')&&<p className="muted">请在电脑上播放声音并观察音频电平。持续为零可能是静音、设备或权限问题，不能仅凭音轨存在确认采集成功。</p>}
     <div className="guard-info">最近音频：{age===null?'—':`${age} ms`} · 上行：{rate} B/s · 识别延迟（从音频发送起）：{latency===null?'—':`${latency} ms`} · 重连：{attempts} · 缓冲丢弃：{decodeErrors} · 乱序丢弃：{drops}</div>
     <div className="transcript" aria-live="polite">{rows.length?rows.map((row,index)=><p key={index} className={row.isFinal?'':'partial'}>{row.text}</p>):<p className="muted">开始后，识别文字会显示在这里。</p>}</div>
+    <MicrophonePanel enabled={phase==='listening'} onFinal={text=>onFinal('microphone',text)}/>
   </section>
 }

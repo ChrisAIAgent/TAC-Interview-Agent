@@ -22,6 +22,15 @@ export class SystemAudioCaptureError extends Error {
  * this module performs no ASR or network requests.
  */
 export async function startSystemAudio(options: CaptureOptions): Promise<CaptureHandle> {
+  return startCapture(options, 'system');
+}
+
+/** Start only from an explicit user action after explaining cloud transcription. */
+export async function startMicrophoneAudio(options: CaptureOptions): Promise<CaptureHandle> {
+  return startCapture(options, 'microphone');
+}
+
+async function startCapture(options: CaptureOptions, kind: 'system' | 'microphone'): Promise<CaptureHandle> {
   let stream: MediaStream | undefined;
   let context: AudioContext | undefined;
   let source: MediaStreamAudioSourceNode | undefined;
@@ -40,11 +49,13 @@ export async function startSystemAudio(options: CaptureOptions): Promise<Capture
   };
   try {
     // getDisplayMedia requires a video track. Release it immediately after grant.
-    stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+    stream = kind === 'system'
+      ? await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })
+      : await navigator.mediaDevices.getUserMedia({ video: false, audio: { echoCancellation: true, noiseSuppression: true } });
     const audio = stream.getAudioTracks()[0];
     stream.getVideoTracks().forEach((track) => track.stop());
     if (!audio || audio.readyState !== 'live') {
-      throw new SystemAudioCaptureError('没有取得有效的系统音频轨道，或音轨已结束。请检查系统权限、音频设备和当前版本的系统音频支持。');
+      throw new SystemAudioCaptureError(kind === 'system' ? '没有取得有效的系统音频轨道，或音轨已结束。请检查系统权限、音频设备和当前版本的系统音频支持。' : '没有取得有效的麦克风音轨，请检查麦克风设备和系统权限。');
     }
     context = new AudioContext({ sampleRate: 16000 });
     // Never silently label a different sample rate as 16 kHz.

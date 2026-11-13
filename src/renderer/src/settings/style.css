@@ -23,3 +23,56 @@ h3 { color:#dedfe0; font-size:13px; margin:20px 0 8px; }.editor-block { border:1
 details { margin-top:16px; color:#b9bbc0; font-size:12px; } details summary { cursor:pointer; } details textarea { margin:8px 0; }
 
 .question-field { margin-top:16px; } .answer-preview { margin-top:14px; padding:14px; border:1px solid #393b40; border-radius:4px; font-size:12px; line-height:1.65; overflow:auto; } .answer-preview pre { overflow:auto; background:#101113; padding:8px; }
+
+/* First-run setup flow */
+html { scroll-behavior:smooth; scroll-padding-top:20px; }
+.settings-nav { display:flex; flex-direction:column; gap:4px; margin-top:34px; }
+.settings-nav a { color:#a5a7ac; text-decoration:none; font-size:11px; padding:9px 10px; border-left:2px solid transparent; border-radius:0 3px 3px 0; }
+.settings-nav a:hover,.settings-nav a:focus-visible { color:#fff; background:#1b1c20; border-left-color:#e60012; outline:none; }
+.start-card { border-color:#484044; background:linear-gradient(135deg,#211719,#151619 56%); padding:24px; }
+.start-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.start-heading h2 { font-size:20px; }
+.setup-steps { display:grid; gap:7px; margin-top:18px; }
+.setup-step { display:grid; grid-template-columns:30px minmax(0,1fr) auto; align-items:center; gap:12px; padding:11px 12px; color:inherit; text-decoration:none; background:#17181b; border:1px solid #303135; border-radius:4px; }
+.setup-step:hover,.setup-step:focus-visible { border-color:#8f3b43; outline:none; background:#21191c; }
+.step-index { display:grid; place-items:center; width:27px; height:27px; border:1px solid #66686d; border-radius:50%; color:#f1f1f2; font-size:11px; font-weight:700; }
+.setup-step strong,.setup-step small { display:block; }
+.setup-step strong { font-size:12px; }
+.setup-step small { margin-top:4px; color:#94979d; font-size:10px; }
+.step-state { color:#ffb0b7; font-size:10px; white-space:nowrap; }
+.step-state.done,.step-state.ready { color:#8ed3a8; }
+.step-state.optional { color:#a8abb1; }
+.start-footnote { display:flex; align-items:center; gap:8px; margin-top:14px; color:#a8abb1; font-size:10px; line-height:1.5; }
+.status-dot { width:7px; height:7px; background:#e60012; border-radius:50%; flex:0 0 7px; }
+.badge.complete { color:#8ed3a8; border-color:#426d50; }
+.provider-tip,.data-note,.step-hint,.test-result { padding:10px 12px; font-size:11px; line-height:1.6; margin:12px 0; border-left:2px solid #c88528; background:#29231a; color:#e5c18f; }
+.data-note { border-left-color:#56667e; background:#1b2028; color:#b9c5d6; }
+.data-note strong { color:#e0e8f3; }
+.step-hint { border-left-color:#e60012; background:#29191c; color:#e9b5bb; }
+.test-result { border-left-color:#c24752; }
+.test-result.success { border-left-color:#54a874; background:#19261e; color:#a9e4c3; }
+.model-actions { flex-wrap:wrap; }
+.model-actions span { flex:1 1 220px; }
+.credential-disclosure,.quick-import,.advanced-settings { border:1px solid #35373b; border-radius:4px; padding:11px 12px; margin:14px 0; background:#121316; }
+.credential-disclosure summary,.quick-import summary,.advanced-settings summary { color:#d5d7db; cursor:pointer; font-size:11px; font-weight:700; }
+.credential-disclosure[open] summary,.quick-import[open] summary,.advanced-settings[open] summary { margin-bottom:10px; }
+.quick-import textarea { min-height:110px; margin:6px 0 10px; }
+.advanced-settings { margin-top:22px; }
+.answer-actions { margin-top:12px; }
+.microphone-panel { margin-top:18px; padding:14px; border:1px solid #393b40; border-radius:4px; background:#111215; }
+.microphone-panel h3 { margin-top:0; }
+.question-field textarea { min-height:105px; }
+.secondary-card { border-color:#292b2f; background:#111215; }
+section[id] { scroll-margin-top:16px; }
+@media(max-width:800px) {
+  .settings-nav { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:14px; }
+  .settings-nav a { padding:7px 8px; }
+  .start-heading { align-items:flex-start; }
+}
+@media(max-width:520px) {
+  .start-card { padding:17px; }
+  .start-heading { flex-direction:column; }
+  .setup-step { grid-template-columns:28px minmax(0,1fr); }
+  .step-state { grid-column:2; }
+  .model-actions { align-items:flex-start; }
+}

@@ -46,7 +46,9 @@ export async function saveCredentials(input: unknown): Promise<CredentialSummary
     const value = values[key];
     if (value === undefined || value === '') continue;
     if (typeof value !== 'string' || value.length > 4096) throw new Error('凭据格式无效。');
-    stored[key] = safeStorage.encryptString(value).toString('base64');
+    const normalized = key.startsWith('tencent') ? value.trim() : value;
+    if (!normalized) continue;
+    stored[key] = safeStorage.encryptString(normalized).toString('base64');
   }
   for (const key of configKeys) {
     const value = values[key];
@@ -65,7 +67,7 @@ export async function getTencentCredentials(): Promise<{appId:string;secretId:st
   const decrypt=(key:CredentialKey):string=>{
     const value=stored[key];
     if(typeof value!=='string' || !value) throw new Error('请先保存腾讯云语音识别凭证。');
-    try{return safeStorage.decryptString(Buffer.from(value,'base64'));}
+    try{return safeStorage.decryptString(Buffer.from(value,'base64')).trim();}
     catch{throw new Error('无法读取腾讯云语音识别凭证。');}
   };
   return {appId:decrypt('tencentAppId'),secretId:decrypt('tencentSecretId'),secretKey:decrypt('tencentSecretKey')};

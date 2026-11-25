@@ -7,6 +7,8 @@ import { AnswerPanel } from './AnswerPanel'
 import { appendSpeechTurn, type SpeechTurn } from '../session/conversation'
 import { loadQuestionBank, type QuestionBankEntry } from '../session/question-bank'
 import { QuestionBankPanel } from './QuestionBankPanel'
+import { loadKnowledge, type KnowledgeEntry } from '../session/knowledge'
+import { KnowledgePanel } from './KnowledgePanel'
 
 const presets = [
   { name: '阿里云百炼', url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen3.8-flash' },
@@ -28,6 +30,7 @@ function App(): React.JSX.Element {
   const [speech, setSpeech] = useState<SpeechTurn[]>([])
   const [sessionId, setSessionId] = useState(0)
   const [bank, setBank] = useState<QuestionBankEntry[]>(loadQuestionBank)
+  const [knowledge, setKnowledge] = useState<KnowledgeEntry[]>(loadKnowledge)
   const [windowState, setWindowState] = useState<WindowState | null>(null)
   const [shortcut, setShortcut] = useState('Alt+Shift+H')
   const [error, setError] = useState('')
@@ -145,6 +148,7 @@ function App(): React.JSX.Element {
         <a href="#step-model">01 模型连接</a>
         <a href="#step-resume">02 简历资料</a>
         <a href="#step-bank">问题库</a>
+        <a href="#step-knowledge">知识资料库</a>
         <a href="#step-answer">03 手动试答</a>
         <a href="#step-audio">可选 · 实时转写</a>
         <a href="#step-window">窗口快捷键</a>
@@ -182,7 +186,7 @@ function App(): React.JSX.Element {
             <label className="wide">Base URL<input value={baseUrl} onChange={event => { setBaseUrl(event.target.value); setModelTestMessage('') }} placeholder="https://…/v1" /></label>
           </div>
           {presets[preset].name === '阿里云百炼' && <p className="provider-tip">百炼请使用北京地域的普通 API Key。若用免费额度试跑，先在控制台为该模型开启“免费额度用完即停”。</p>}
-          <p className="data-note">生成回答时，问题、相关简历片段和本次会话转写会发送至 <strong>{host}</strong>。连接测试只发送固定测试短句。</p>
+          <p className="data-note">生成回答时，问题、相关简历片段、匹配的知识资料和本次会话转写会发送至 <strong>{host}</strong>。连接测试只发送固定测试短句。</p>
           <div className="action-line model-actions"><button className="primary" type="submit" disabled={savingModel || summary?.available === false}>{savingModel ? '正在保存…' : '保存模型设置'}</button><button type="button" disabled={testingModel || !modelConfigured} onClick={() => void testModel()}>{testingModel ? '正在测试…' : '测试已保存配置'}</button><span>{modelConfigured ? `当前已保存：${savedHost}` : '保存后再测试连接'}</span></div>
           {modelTestMessage && <p className={modelTestMessage.includes('成功') ? 'test-result success' : 'test-result'} role="status">{modelTestMessage}</p>}
         </form>
@@ -190,8 +194,9 @@ function App(): React.JSX.Element {
 
       <ResumePanel resume={resume} setResume={setResume} />
       <QuestionBankPanel entries={bank} setEntries={setBank} />
-      <AnswerPanel resume={resume} candidate={candidate} speech={speech} sessionId={sessionId} provider={summary?.llmProvider || 'openai-compat'} host={savedHost} configured={modelConfigured} bank={bank} />
-      <AudioPanel credentialsReady={asrReady} credentialSummary={summary} credentialValues={credentials} onCredentialChange={updateCredential} onSaveCredentials={() => void saveAsr()} savingCredentials={savingAsr} onReset={() => { void window.interviewAPI.cancelAnswer(); setSpeech([]); setCandidate(null); setSessionId(previous => previous + 1) }} onFinal={(source, text) => { setSpeech(previous => appendSpeechTurn(previous, source, text)); if (source === 'system') setCandidate(previous => ({ id: (previous?.id ?? 0) + 1, text })) }} />
+      <KnowledgePanel entries={knowledge} setEntries={setKnowledge} />
+      <AnswerPanel resume={resume} candidate={candidate} speech={speech} sessionId={sessionId} provider={summary?.llmProvider || 'openai-compat'} host={savedHost} configured={modelConfigured} bank={bank} knowledge={knowledge} />
+      <AudioPanel credentialsReady={asrReady} modelConfigured={modelConfigured} credentialSummary={summary} credentialValues={credentials} onCredentialChange={updateCredential} onSaveCredentials={() => void saveAsr()} savingCredentials={savingAsr} onReset={() => { void window.interviewAPI.cancelAnswer(); setSpeech([]); setCandidate(null); setSessionId(previous => previous + 1) }} onFinal={(source, text) => { setSpeech(previous => appendSpeechTurn(previous, source, text)); if (source === 'system') setCandidate(previous => ({ id: (previous?.id ?? 0) + 1, text })) }} />
       {speech.length > 0 && <section className="card"><div className="section-heading"><h2>本次会话转写</h2><button type="button" onClick={() => setSpeech([])}>清空转写</button></div><p className="muted">按识别返回顺序显示；标签代表音源，回声和其他系统声音可能造成混入。内容仅在本次会话内存中，生成回答时会发送给所选模型。</p><div className="transcript">{speech.map((turn, index) => <p key={index}><strong>{turn.source === 'microphone' ? '我的麦克风' : '系统声音'}：</strong>{turn.text}</p>)}</div></section>}
 
       <section className="card secondary-card" id="step-window">

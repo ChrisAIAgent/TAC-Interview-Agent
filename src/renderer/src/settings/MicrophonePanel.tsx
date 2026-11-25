@@ -3,7 +3,7 @@ import workletUrl from '../audio/worklet.js?url'
 import { startMicrophoneAudio, type CaptureHandle } from '../audio/capture'
 import { TencentAsr } from '../asr/tencent'
 
-export function MicrophonePanel({ enabled, onFinal }: { enabled: boolean; onFinal: (text: string) => void }): React.JSX.Element {
+export function MicrophonePanel({ enabled, hotwords, asrModel, onFinal }: { enabled: boolean; hotwords: string[]; asrModel:string; onFinal: (text: string) => void }): React.JSX.Element {
   const [consent, setConsent] = useState(false)
   const [phase, setPhase] = useState<'idle' | 'connecting' | 'listening' | 'reconnecting' | 'stopping' | 'failed'>('idle')
   const [message, setMessage] = useState('')
@@ -32,7 +32,7 @@ export function MicrophonePanel({ enabled, onFinal }: { enabled: boolean; onFina
     const current = ++generation.current
     setMessage(''); setTranscript(''); setPhase('connecting')
     const asr = new TencentAsr({
-      sign: () => window.interviewAPI.signTencent(),
+      sign: () => window.interviewAPI.signTencent(hotwords,asrModel),
       onResult: line => {
         if (current !== generation.current) return
         setTranscript(line.text)
@@ -62,10 +62,10 @@ export function MicrophonePanel({ enabled, onFinal }: { enabled: boolean; onFina
       if (current !== generation.current) { await input.stop(); return }
       capture.current = input
       await asr.init()
-    } catch {
+    } catch (error) {
       if (current !== generation.current) return
       await capture.current?.stop(); capture.current = null; engine.current = null; asr.dispose()
-      setMessage('麦克风转写启动失败，请检查麦克风权限、腾讯云凭证、并发额度和网络。'); setPhase('failed')
+      setMessage(error instanceof Error && error.message ? error.message : '麦克风转写启动失败，请检查麦克风权限、腾讯云凭证、并发额度和网络。'); setPhase('failed')
     }
   }
   const active = phase === 'connecting' || phase === 'listening' || phase === 'reconnecting' || phase === 'stopping'

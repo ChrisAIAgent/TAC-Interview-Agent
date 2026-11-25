@@ -1,6 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { newTencentResultState, reduceTencentMessage } from '../src/renderer/src/asr/tencent-result.ts';
+import { newTencentResultState, reduceTencentMessage, reduceTencentMessages } from '../src/renderer/src/asr/tencent-result.ts';
+
+test('V2 processes multiple sentences, including a final and a live partial',()=>{
+ const state=newTencentResultState('v1');
+ const payload={code:0,voice_id:'v1',sentences:{voice_text_str:'你好世界',sentence_list:[{sentence_id:0,sentence_type:1,sentence:'你好'},{sentence_id:1,sentence_type:0,sentence:'世界'}]}};
+ const first=reduceTencentMessages(state,JSON.stringify(payload));
+ assert.deepEqual(first.events.map(event=>[event.line.text,event.line.isFinal]),[['你好',true],['世界',false]]);
+ payload.sentences.sentence_list[1].sentence_type=1;
+ const second=reduceTencentMessages(first.state,JSON.stringify(payload));
+ assert.deepEqual(second.events.map(event=>[event.line.text,event.line.isFinal]),[['世界',true]]);
+ assert.equal(reduceTencentMessages(second.state,JSON.stringify({code:0,voice_id:'v1',final:1})).events[0].type,'complete');
+});
 const body=(index,slice_type,text='你好')=>JSON.stringify({code:0,voice_id:'v1',result:{index,slice_type,voice_text_str:text,start_time:0,end_time:100}});
 test('intermediate and final text are distinct; duplicate and older finals are dropped',()=>{
  let state=newTencentResultState('v1'); let result=reduceTencentMessage(state,body(0,1)); assert.equal(result.event.type,'transcript'); assert.equal(result.event.line.isFinal,false);

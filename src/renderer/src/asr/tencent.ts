@@ -1,5 +1,5 @@
 import { AudioPacer } from '../audio/pacer.ts';
-import { newTencentResultState, reduceTencentMessage, type TencentResultState, type TencentTranscript } from './tencent-result.ts';
+import { newTencentResultState, reduceTencentMessages, type TencentResultState, type TencentTranscript } from './tencent-result.ts';
 
 export interface TencentAsrError { code: string; message: string; retryable: boolean }
 export interface TencentSocket {
@@ -29,7 +29,8 @@ class AsrFailure extends Error {
 const networkError=(): TencentAsrError=>({code:'ASR_NETWORK',message:'语音识别连接中断，请检查网络。',retryable:true});
 const safeError=(code: number): TencentAsrError=>{
   if (code===4002) return {code:'ASR_AUTH',message:'语音识别凭证无效，请检查设置。',retryable:false};
-  if (code===4004 || code===4005) return {code:'ASR_QUOTA',message:'语音识别额度已用完或账户欠费。',retryable:false};
+  if (code===4004) return {code:'ASR_QUOTA',message:'语音识别资源包已耗尽或未开通后付费（腾讯云 4004）。',retryable:false};
+  if (code===4005) return {code:'ASR_QUOTA',message:'腾讯云账户欠费，语音识别已停止（腾讯云 4005）。',retryable:false};
   if (code===4006) return {code:'ASR_CONCURRENCY',message:'并发超限，请稍后重试。',retryable:true};
   if (code===4000) return {code:'ASR_RATE_LIMIT',message:'音频发送过快，正在重连。',retryable:true};
   if (code===4008 || code===4009 || code===5000 || code===5001 || code===5002) return networkError();
@@ -163,11 +164,13 @@ export class TencentAsr {
         if (generation!==this.generation || !this.result) return;
         const data=(event as MessageEvent<unknown>).data;
         if (typeof data!=='string') { fail({code:'ASR_PROTOCOL',message:'语音识别返回了无效数据。',retryable:false}); return; }
-        const oldDrops=this.result.dropCount; const reduced=reduceTencentMessage(this.result,data); this.result=reduced.state; this.totalDrops+=this.result.dropCount-oldDrops; this.options.onDrops?.(this.totalDrops);
-        if (reduced.event.type==='error') { fail(typeof reduced.event.code==='number'?safeError(reduced.event.code):{code:'ASR_PROTOCOL',message:reduced.event.message,retryable:false}); return; }
-        if (reduced.event.type==='ready' && !settled) { ready=true; settled=true; clearTimeout(timer); this.cancelConnection=null; this.connected=true; this.options.onSession?.(); resolve(); return; }
-        if (reduced.event.type==='transcript') { this.options.onResult?.(reduced.event.line); if (reduced.event.streamEnded) this.finish(); }
-        if (reduced.event.type==='complete') this.finish();
+        const oldDrops=this.result.dropCount; const reduced=reduceTencentMessages(this.result,data); this.result=reduced.state; this.totalDrops+=this.result.dropCount-oldDrops; this.options.onDrops?.(this.totalDrops);
+        for (const item of reduced.events) {
+          if (item.type==='error') { fail(typeof item.code==='number'?safeError(item.code):{code:'ASR_PROTOCOL',message:item.message,retryable:false}); return; }
+          if (item.type==='ready' && !settled) { ready=true; settled=true; clearTimeout(timer); this.cancelConnection=null; this.connected=true; this.options.onSession?.(); resolve(); return; }
+          if (item.type==='transcript') { this.options.onResult?.(item.line); if (item.streamEnded) this.finish(); }
+          if (item.type==='complete') this.finish();
+        }
       });
       socket.addEventListener('error',()=>fail(networkError()));
       socket.addEventListener('close',()=>{if(this.finishing) this.finish();else fail(networkError());});

@@ -1,0 +1,491 @@
+[
+  {
+    "id": "qwen-social-guide-strategy",
+    "title": "海外社媒与社区：整体策略",
+    "content": "运营建议：先结合目标市场、用户、业务目标、现有账号数据和团队资源确定各平台职责。X 适合真实工作流短演示和公开互动，LinkedIn 适合岗位场景和企业沟通，YouTube 可做完整教程；Reddit 侧重倾听及答疑，Discord 侧重持续支持。先用真实案例帮助用户理解产品，再提供教程、活动或咨询入口；分别衡量曝光互动、用户体验和有效线索。以上是建议，需结合实际验证。",
+    "tags": [
+      "海外社媒",
+      "社区运营",
+      "平台区别",
+      "运营策略",
+      "品牌曝光",
+      "线索",
+      "QwenWork"
+    ],
+    "sources": [],
+    "verifiedAt": "2026-11-15",
+    "kind": "guidance",
+    "document": "QwenWork_海外社媒与社区运营指南.docx"
+  },
+  {
+    "id": "qwen-social-guide-x",
+    "title": "X：公开讨论与真实工作流",
+    "content": "运营建议：每条内容聚焦一个工作任务，展示输入、步骤、输出和必要的人工检查；邀请真实使用者分享工作方式，围绕用户问题答疑，结合演示或工作坊获得同意后展示成果。可观察目标市场曝光、有效评论、用户分享以及体验和符合业务标准的线索。曝光不等于有效商机。",
+    "tags": [
+      "X",
+      "Twitter",
+      "推特",
+      "社媒",
+      "工作流",
+      "用户成果"
+    ],
+    "sources": [],
+    "verifiedAt": "2026-11-15",
+    "kind": "guidance",
+    "document": "QwenWork_海外社媒与社区运营指南.docx"
+  },
+  {
+    "id": "qwen-social-guide-linkedin",
+    "title": "LinkedIn：岗位场景与专业信任",
+    "content": "运营建议：围绕市场、电商等具体岗位，展示真实背景、输入、输出和人工审核；短演示可连接完整教程、线上分享会或企业咨询。在用户同意前提下，由区域和业务团队跟进明确需求。关注目标行业和岗位的互动、活动报名、企业咨询、团队试用与被业务团队接收的有效线索。",
+    "tags": [
+      "LinkedIn",
+      "领英",
+      "B2B",
+      "企业",
+      "岗位案例",
+      "社媒"
+    ],
+    "sources": [],
+    "verifiedAt": "2026-11-15",
+    "kind": "guidance",
+    "document": "QwenWork_海外社媒与社区运营指南.docx"
+  },
+  {
+    "id": "qwen-social-guide-facebook",
+    "title": "Facebook：本地社群与活动",
+    "content": "运营建议：借助品牌主页和相关群组先了解当地用户问题。在群组规则允许并与管理员沟通后，可与当地电商、市场运营或小企业社群合作开展答疑、工作坊和经验分享。关注有效讨论、活动报名以及后续体验、咨询和线索。Meta 旗下 Facebook、Instagram 和 Threads 的用户习惯和运营方式不同。",
+    "tags": [
+      "Meta",
+      "Facebook",
+      "脸书",
+      "本地社群",
+      "群组",
+      "活动"
+    ],
+    "sources": [],
+    "verifiedAt": "2026-11-15",
+    "kind": "guidance",
+    "document": "QwenWork_海外社媒与社区运营指南.docx"
+  },
+  {
+    "id": "qwen-social-guide-instagram",
+    "title": "Instagram：视觉化展示",
+    "content": "运营建议：通过短视频、轮播或创作者合作，直观展示产品资料变成营销图片、审核问题被发现或用户完成任务的过程；展示结果时说明必要的人工环节。可关注观看、收藏、分享、主页访问，以及后续产品体验和咨询。",
+    "tags": [
+      "Meta",
+      "Instagram",
+      "Ins",
+      "短视频",
+      "轮播",
+      "创作者"
+    ],
+    "sources": [],
+    "verifiedAt": "2026-11-15",
+    "kind": "guidance",
+    "document": "QwenWork_海外社媒与社区运营指南.docx"
+  },
+  {
+    "id": "qwen-social-guide-threads",
+    "title": "Threads：轻量话题讨论",
+    "content": "运营建议：围绕具体工作问题、用户反馈与产品体验发起简短讨论，例如了解用户希望 AI 协助完成哪些重复工作。同一主题跨渠道使用时，应根据不同受众重新表达；观察相关话题的有效回复和后续体验。",
+    "tags": [
+      "Meta",
+      "Threads",
+      "讨论",
+      "社区",
+      "用户反馈"
+    ],
+    "sources": [],
+    "verifiedAt": "2026-11-15",
+    "kind": "guidance",
+    "document": "QwenWork_海外社媒与社区运营指南.docx"
+  },
+  {
+    "id": "qwen-social-guide-youtube",
+    "title": "YouTube：教程与工作流演示",
+    "content": "运营建议：按岗位和具体任务组织教程，展示输入、执行过程、结果与人工检查；完整教程可拆成短演示、岗位案例和社区操作说明，并在适当位置提供资源、体验或活动入口。可观察观看时长、关键环节流失、资源点击、注册和实际任务完成。文档引用平台说明：搜索会综合相关性、互动等因素，具体规则应重新核验。",
+    "tags": [
+      "YouTube",
+      "油管",
+      "视频教程",
+      "直播",
+      "工作流",
+      "搜索"
+    ],
+    "sources": [
+      {
+        "title": "S06 YouTube 搜索机制说明",
+        "url": "https://support.google.com/youtube/answer/16090438?hl=en"
+      }
+    ],
+    "verifiedAt": "2026-11-15",
+    "kind": "guidance",
+    "document": "QwenWork_海外社媒与社区运营指南.docx"
+  },
+  {
+    "id": "qwen-social-guide-tiktok",
+    "title": "TikTok：短视频展示痛点和结果",
+    "content": "运营建议：用一个明确的工作痛点开场，快速展示实际操作和结果；可邀请真实工作者或创作者介绍任务，并参考评论选择后续话题。应根据当地语言和用户习惯调整素材，不机械照搬其他平台宣传片。关注目标受众观看、分享、评论里的需求和用户质量。平台推荐考虑多种因素，不能把效果归因于单一指标。",
+    "tags": [
+      "TikTok",
+      "海外抖音",
+      "短视频",
+      "创作者",
+      "本地化"
+    ],
+    "sources": [
+      {
+        "title": "S09 TikTok 内容推荐机制说明",
+        "url": "https://support.tiktok.com/en/using-tiktok/exploring-videos/how-tiktok-recommends-content"
+      }
+    ],
+    "verifiedAt": "2026-11-15",
+    "kind": "guidance",
+    "document": "QwenWork_海外社媒与社区运营指南.docx"
+  },
+  {
+    "id": "qwen-social-guide-reddit",
+    "title": "Reddit：先倾听再参与社区",
+    "content": "运营建议：先观察用户对可靠性、隐私、上手难度和成本等问题的讨论，再以清楚的身份回答具体问题并说明限制。在社区规则允许、与版主沟通后，可考虑邀请产品团队或用户参加 AMA。将反复出现的问题反馈给产品和内容团队；重复大量推广可能被视为垃圾内容，实际参与前须复核社区规则。",
+    "tags": [
+      "Reddit",
+      "社区",
+      "AMA",
+      "论坛",
+      "社群规则"
+    ],
+    "sources": [
+      {
+        "title": "S12 Reddit 关于垃圾内容与推广的规则",
+        "url": "https://support.reddithelp.com/hc/en-us/articles/360043504051-Spam"
+      }
+    ],
+    "verifiedAt": "2026-11-15",
+    "kind": "guidance",
+    "document": "QwenWork_海外社媒与社区运营指南.docx"
+  },
+  {
+    "id": "qwen-social-guide-discord",
+    "title": "Discord：持续支持与用户互助",
+    "content": "运营建议：是否自建 Discord 社区，先评估用户需求、已有社区与团队支持能力。可提供新手入门、按岗位分享工作流、问题求助和产品反馈，并明确响应责任；定期组织答疑、作品分享或小型工作坊。关注首次完成任务、持续参与、问题响应和解决情况，而非只看成员总数。",
+    "tags": [
+      "Discord",
+      "社区",
+      "用户支持",
+      "新手",
+      "用户作品",
+      "反馈"
+    ],
+    "sources": [],
+    "verifiedAt": "2026-11-15",
+    "kind": "guidance",
+    "document": "QwenWork_海外社媒与社区运营指南.docx"
+  },
+  {
+    "id": "qwen-social-guide-measurement",
+    "title": "社媒社区与商机：指标和复盘",
+    "content": "运营建议：品牌侧看曝光、覆盖、目标市场及相关人群反馈；内容侧看观看、收藏、分享和有效评论；体验侧看点击、报名、注册及首次任务完成；业务侧看企业咨询、团队试用、销售接收和后续商机。应事先与团队确认有效线索定义、归因和去重口径；曝光次数不等于去重人数，跨平台数据不能直接相加为唯一用户，用户也不一定按固定顺序转化。",
+    "tags": [
+      "指标",
+      "KPI",
+      "曝光",
+      "覆盖",
+      "互动",
+      "获客",
+      "线索",
+      "转化",
+      "复盘",
+      "衡量"
+    ],
+    "sources": [],
+    "verifiedAt": "2026-11-15",
+    "kind": "guidance",
+    "document": "QwenWork_海外社媒与社区运营指南.docx"
+  },
+  {
+    "id": "qwen-social-guide-cross-platform",
+    "title": "一个真实案例如何跨平台传播",
+    "content": "运营方案示例：围绕一个已经跑通的 Facebook 电商发布工作流，在 X 展示输入、人工审图和最终发布；LinkedIn 讲岗位流程与价值；Facebook 可在合适社群分享答疑；Instagram、TikTok 用短视频展示重点；YouTube 提供完整教程；Reddit 在规则允许的讨论中分享；Discord 可组织工作流答疑。活动后经许可整理成果，对明确且愿意沟通的企业交由相关团队跟进。此为方案，不代表已经执行。",
+    "tags": [
+      "跨平台",
+      "线上线下",
+      "工作流",
+      "活动",
+      "内容复用",
+      "整合营销"
+    ],
+    "sources": [],
+    "verifiedAt": "2026-11-15",
+    "kind": "guidance",
+    "document": "QwenWork_海外社媒与社区运营指南.docx"
+  },
+  {
+    "id": "qwen-social-guide-community",
+    "title": "社区建设与用户生态",
+    "content": "运营建议：先了解用户最常见的问题、现有社区和团队支持能力，再选择适合的平台。Reddit 可先倾听和答疑；Discord 可为新用户提供任务引导、支持、作品分享与反馈渠道；线下或线上活动可围绕真实工作任务展开。关注有用讨论、问题解决、用户参与和后续需求，不单看粉丝或成员数。",
+    "tags": [
+      "海外社区",
+      "社群",
+      "社区建设",
+      "用户参与",
+      "生态",
+      "支持"
+    ],
+    "sources": [],
+    "verifiedAt": "2026-11-15",
+    "kind": "guidance",
+    "document": "QwenWork_海外社媒与社区运营指南.docx"
+  },
+  {
+    "id": "qwen-social-guide-open-source",
+    "title": "开源合作与生态赞助思路",
+    "content": "运营建议：优先寻找与目标用户真实办公任务相关的开源项目或合作伙伴，例如演示文稿、营销素材、数据整理和办公自动化。除品牌露出外，可探索共建教程、示例工作流和活动；合作前确认产品适配、支持方式、授权和合作关系披露。评估用户体验与明确需求，不只比较 Star 数或曝光。",
+    "tags": [
+      "开源",
+      "赞助",
+      "合作",
+      "生态",
+      "GitHub",
+      "Kimi"
+    ],
+    "sources": [],
+    "verifiedAt": "2026-11-15",
+    "kind": "guidance",
+    "document": "QwenWork_海外社媒与社区运营指南.docx"
+  },
+  {
+    "id": "qwen-social-guide-case-openai",
+    "title": "公开案例：OpenAI 用户分享与作品展示",
+    "content": "指南记载：OpenAI 曾邀请符合条件的用户在 X 分享使用体验或作品，并提供额度激励，官网分类展示用户帖子。可参考用户分享真实成果、品牌整理展示的机制；该活动包含激励，不能当成零成本自然传播。属于公开案例，不是候选人经历；使用前应核验原始来源。",
+    "tags": [
+      "OpenAI",
+      "X",
+      "用户成果",
+      "创作者",
+      "公开案例"
+    ],
+    "sources": [
+      {
+        "title": "S01 OpenAI 公开用户在 X 上的使用与作品展示",
+        "url": "https://switch-to-codex.openai.chatgpt.site/?role=product-design"
+      }
+    ],
+    "verifiedAt": "2026-11-15",
+    "kind": "case",
+    "document": "QwenWork_海外社媒与社区运营指南.docx"
+  },
+  {
+    "id": "qwen-social-guide-case-linkedin",
+    "title": "公开案例：Kimi 与 Claude 的岗位内容",
+    "content": "指南记载：Kimi 的 LinkedIn 账号曾展示金融岗位的看板、财务模型和报告处理任务；Claude 曾展示市场团队成员使用 Cowork 做周度指标复盘并引导 Webinar 报名。可参考以真实岗位任务连接教程或专业活动。属于他人公开案例，不代表候选人亲自执行。",
+    "tags": [
+      "Kimi",
+      "Claude",
+      "LinkedIn",
+      "岗位案例",
+      "Webinar",
+      "竞品"
+    ],
+    "sources": [
+      {
+        "title": "S02 Kimi Work 金融工作流 LinkedIn 教程",
+        "url": "https://www.linkedin.com/posts/kimi-ai-linkedin_buildwithk3-kimiwork-activity-7495870446827929601-krqS"
+      },
+      {
+        "title": "S03 Claude 市场团队工作流 LinkedIn 帖文",
+        "url": "https://www.linkedin.com/posts/claude_how-the-anthropic-marketing-team-uses-claude-activity-7465491042264469504-bGWf"
+      }
+    ],
+    "verifiedAt": "2026-11-15",
+    "kind": "case",
+    "document": "QwenWork_海外社媒与社区运营指南.docx"
+  },
+  {
+    "id": "qwen-social-guide-case-canva",
+    "title": "公开案例：Canva Facebook 设计与教师社区",
+    "content": "指南记载：Canva 介绍其 Facebook Design Community 供用户分享作品、获取反馈和学习教程；教师社区包含全球及不同国家、语言群组。可参考按用户角色与地区组织交流空间。属于他人公开案例，应结合当前资料核验。",
+    "tags": [
+      "Canva",
+      "Facebook",
+      "社群",
+      "教师",
+      "本地化",
+      "社区"
+    ],
+    "sources": [
+      {
+        "title": "S04 Canva Design Community 官方介绍",
+        "url": "https://www.canva.com/community/"
+      },
+      {
+        "title": "S05 Canva 全球及各地区教师社区",
+        "url": "https://www.canva.com/community/teachers/"
+      }
+    ],
+    "verifiedAt": "2026-11-15",
+    "kind": "case",
+    "document": "QwenWork_海外社媒与社区运营指南.docx"
+  },
+  {
+    "id": "qwen-social-guide-case-notion",
+    "title": "公开案例：Notion 销售岗位工作流教程",
+    "content": "指南记载：Notion 曾发布面向销售人员的 AI 工作流教程，展示从客户研究到准备外联内容的步骤并配套文字说明。可参考以明确岗位的一项完整任务作为教程主题。属于他人公开案例，不是候选人经验。",
+    "tags": [
+      "Notion",
+      "YouTube",
+      "教程",
+      "销售",
+      "工作流",
+      "竞品"
+    ],
+    "sources": [
+      {
+        "title": "S07 Notion 官方销售线索工作流教程",
+        "url": "https://www.notion.com/fr/help/guides/how-to-automate-sales-prospecting-in-notion-with-custom-agents"
+      },
+      {
+        "title": "S08 Notion 官方 YouTube 工作流视频",
+        "url": "https://www.youtube.com/watch?v=g1XSdDiBPvE"
+      }
+    ],
+    "verifiedAt": "2026-11-15",
+    "kind": "case",
+    "document": "QwenWork_海外社媒与社区运营指南.docx"
+  },
+  {
+    "id": "qwen-social-guide-case-bigvu",
+    "title": "公开案例：BIGVU 创作者与 TikTok 投放",
+    "content": "指南记载：BIGVU 曾与小企业创作者合作制作适合 TikTok 的内容，并结合 Spark Ads 等投放。TikTok 案例材料称试用成本下降 85%；该结果涉及创作者内容、付费投放及其他优化，不能归因于单一动作，更不能说成纯自然流量效果。数字为案例自述，需核验。",
+    "tags": [
+      "BIGVU",
+      "TikTok",
+      "创作者",
+      "Spark Ads",
+      "竞品",
+      "付费投放"
+    ],
+    "sources": [
+      {
+        "title": "S10 TikTok for Business BIGVU 案例",
+        "url": "https://ads.tiktok.com/business/en-US/inspiration/bigvu-communities"
+      }
+    ],
+    "verifiedAt": "2026-11-15",
+    "kind": "case",
+    "document": "QwenWork_海外社媒与社区运营指南.docx"
+  },
+  {
+    "id": "qwen-social-guide-case-reddit",
+    "title": "公开案例：OpenAI 在 Reddit 的 AMA",
+    "content": "指南记载：2025 年 OpenAI 团队曾在 r/OpenAI 围绕 DevDay 发布内容开展 AMA，由团队成员回答用户问题。可以参考邀请产品团队回应实际问题的形式；参与社区前须复核版规与推广要求。此为他人公开案例。",
+    "tags": [
+      "OpenAI",
+      "Reddit",
+      "AMA",
+      "社区",
+      "用户问答"
+    ],
+    "sources": [
+      {
+        "title": "S11 OpenAI 团队 Reddit AMA 原帖 2025",
+        "url": "https://www.reddit.com/r/OpenAI/comments/1o1j23g/ama_on_our_devday_launches/"
+      },
+      {
+        "title": "S12 Reddit 关于垃圾内容与推广的规则",
+        "url": "https://support.reddithelp.com/hc/en-us/articles/360043504051-Spam"
+      }
+    ],
+    "verifiedAt": "2026-11-15",
+    "kind": "case",
+    "document": "QwenWork_海外社媒与社区运营指南.docx"
+  },
+  {
+    "id": "qwen-social-guide-case-midjourney",
+    "title": "公开案例：Midjourney Discord 社区",
+    "content": "指南记载：Discord 的 Midjourney 案例介绍了创始人答疑、收集反馈、支持新用户和用户分享作品等做法。可以参考社区服务机制，但不应假设 QwenWork 需要采用相同技术接入方式；此为其他公司的公开案例。",
+    "tags": [
+      "Midjourney",
+      "Discord",
+      "社区运营",
+      "答疑",
+      "用户反馈"
+    ],
+    "sources": [
+      {
+        "title": "S13 Discord Midjourney 社区案例",
+        "url": "https://discord.com/build-case-studies/midjourney"
+      }
+    ],
+    "verifiedAt": "2026-11-15",
+    "kind": "case",
+    "document": "QwenWork_海外社媒与社区运营指南.docx"
+  },
+  {
+    "id": "qwen-social-guide-case-kimi-work",
+    "title": "公开案例：Kimi Work 与 PPT Skill 开源赞助",
+    "content": "指南记载：guizang-ppt-skill 的赞助说明将 Kimi Work 列为金牌赞助方，并提到该项目可在 Kimi Work Skill 商店中使用。案例连接办公用户演示文稿需求、开源项目和产品场景。公开页面未披露赞助金额或用户转化，不应推测。",
+    "tags": [
+      "Kimi",
+      "Kimi Work",
+      "GitHub",
+      "开源",
+      "PPT",
+      "赞助",
+      "生态"
+    ],
+    "sources": [
+      {
+        "title": "S14 guizang-ppt-skill 项目赞助说明",
+        "url": "https://github.com/op7418/guizang-ppt-skill/blob/main/SPONSORS.md"
+      }
+    ],
+    "verifiedAt": "2026-11-15",
+    "kind": "case",
+    "document": "QwenWork_海外社媒与社区运营指南.docx"
+  },
+  {
+    "id": "qwen-social-guide-case-kimi-code",
+    "title": "公开案例：Moonshot AI 与 ECC 开源项目",
+    "content": "指南记载：ECC 版本说明将 Moonshot AI（Kimi）列为公开赞助方，并称项目支持 Kimi Code。这是 Kimi Code 和开发者生态相关案例，应与 Kimi Work 的合作分别描述；不要推测赞助金额与效果。",
+    "tags": [
+      "Moonshot",
+      "Kimi Code",
+      "ECC",
+      "GitHub",
+      "开源",
+      "赞助",
+      "开发者"
+    ],
+    "sources": [
+      {
+        "title": "S15 ECC 2.1.0 版本与赞助说明",
+        "url": "https://github.com/affaan-m/ECC/blob/main/docs/releases/2.1.0/release-notes.md"
+      }
+    ],
+    "verifiedAt": "2026-11-15",
+    "kind": "case",
+    "document": "QwenWork_海外社媒与社区运营指南.docx"
+  },
+  {
+    "id": "qwen-social-guide-case-build-week",
+    "title": "公开案例：OpenAI Build Week 活动",
+    "content": "指南记载：OpenAI Build Week 结合线上线下活动和参与者作品，2026 年活动总结记录了参与者和作品数量。可参考活动与用户成果联动；活动参与数据不能直接等同于付费用户或企业商机。",
+    "tags": [
+      "OpenAI",
+      "Build Week",
+      "线上线下",
+      "活动",
+      "用户作品"
+    ],
+    "sources": [
+      {
+        "title": "S16 OpenAI Build Week 参与及成果报告 2026",
+        "url": "https://developers.openai.com/blog/build-week-winners"
+      }
+    ],
+    "verifiedAt": "2026-11-15",
+    "kind": "case",
+    "document": "QwenWork_海外社媒与社区运营指南.docx"
+  }
+]

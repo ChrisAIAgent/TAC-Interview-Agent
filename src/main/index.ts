@@ -11,7 +11,10 @@ import { loadResume, saveResume } from './store/resume';
 import { DEFAULT_TOGGLE_SHORTCUT, readPreferences, savePreferences } from './store/preferences';
 import { classifyUtterance } from './llm/classify';
 import { searchPublicTopic } from './llm/public-search';
+import { SemanticFailure, SemanticSearch, isValidSemanticInput, type SemanticInput } from './llm/semantic-search';
+import { rerankKnowledge } from './llm/semantic-rerank';
 import { PUBLIC_SEARCH_QUERIES, type PublicSearchTopic } from '../shared/public-search';
+import { DEFAULT_ASR_HOTWORDS, isValidAsrHotword } from '../shared/asr-hotwords';
 
 interface WindowState { shortcut: string; shortcutError: string | null; visible: boolean }
 let overlay: BrowserWindow | null=null;
@@ -40,15 +43,25 @@ function endResize(event:Electron.IpcMainEvent):void {
 }
 async function loadProvider(){
   const cfg=await getLlmConfiguration();
+  const host=new URL(cfg.baseUrl).hostname;
+  const disableThinking=cfg.model==='qwen3.8-flash' && (host==='dashscope.aliyuncs.com'||/\.cn-beijing\.maas\.aliyuncs\.com$/i.test(host));
   return cfg.provider==='ollama'
     ? {provider:new OllamaProvider(cfg.model,cfg.baseUrl),remote:false}
-    : {provider:new OpenAICompatProvider(cfg.model,cfg.apiKey,cfg.baseUrl),remote:true};
+    : {provider:new OpenAICompatProvider(cfg.model,cfg.apiKey,cfg.baseUrl),remote:true,disableThinking};
 }
 let classificationController:AbortController|null=null;
 function publishAnswer(value:AnswerUpdate):void {
   for(const win of [overlay,settings]) if(win && !win.isDestroyed()) win.webContents.send('llm:answer',value);
 }
 const answers=new AnswerManager(loadProvider,publishAnswer);
+const semanticSearch=new SemanticSearch(getLlmConfiguration,()=>join(app.getPath('userData'),'semantic-knowledge-v1.json'));
+let semanticController:AbortController|null=null;
+let embeddingFreeTierExhausted=false;
+function cancelSemantic(notify:boolean):void {
+  semanticSearch.cancel();
+  semanticController?.abort();semanticController=null;
+  if(notify&&settings&&!settings.isDestroyed())settings.webContents.send('knowledge:cancelled');
+}
 
 function state(): WindowState { return { shortcut, shortcutError, visible: !!overlay?.isVisible() }; }
 function notifyState(): void {
@@ -91,6 +104,15 @@ function openSettings(): void {
   settings=new BrowserWindow({ width:980,height:760,minWidth:760,minHeight:600,title:'TAC Interview Agent 设置',
     webPreferences:{preload:join(__dirname,'../preload/index.js'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false} });
   settings.webContents.setWindowOpenHandler(() => ({action:'deny'}));
+  settings.webContents.on('did-start-loading',()=>{
+    classificationController?.abort();answers.cancel();cancelSemantic(true);
+    if(overlay&&!overlay.isDestroyed())overlay.webContents.send('session:status',{phase:'stopped',level:0});
+  });
+  // The previous renderer can emit a final audio frame while it is unloading.
+  // Reassert the stopped state once the new settings page has finished loading.
+  settings.webContents.on('did-finish-load',()=>{
+    if(overlay&&!overlay.isDestroyed())overlay.webContents.send('session:status',{phase:'stopped',level:0});
+  });
   installSystemAudioHandler(settings.webContents.session,settings.webContents);
   settings.on('close',event=>{if(!quitting){event.preventDefault();settings?.hide();}});
   settings.on('closed',()=>{settings=null;});
@@ -107,6 +129,17 @@ ipcMain.on('overlay:resize-end',endResize);
 ipcMain.on('overlay:hide',event=>{if(isTrusted(event)) hideOverlay();});
 ipcMain.on('overlay:quit',event=>{if(isTrusted(event)) app.quit();});
 ipcMain.on('settings:open',event=>{if(isTrusted(event)) openSettings();});
+// The overlay click is the user's gesture; forward it to the existing capture
+// owner so getDisplayMedia is still invoked with a Chromium user activation.
+ipcMain.on('interview:control',(event,action:unknown)=>{
+  if(!isTrusted(event) || event.sender!==overlay?.webContents || (action!=='start' && action!=='stop')) return;
+  if(action==='stop') {classificationController?.abort();answers.cancel();cancelSemantic(true);}
+  if(!settings || settings.isDestroyed()) { openSettings(); overlay?.webContents.send('session:status',{phase:'failed',level:0}); return; }
+  const target=settings;
+  const name=action==='start'?'tac:interview-start':'tac:interview-stop';
+  void target.webContents.executeJavaScript(`window.dispatchEvent(new Event('${name}'))`,action==='start')
+    .catch(()=>{if(overlay&&!overlay.isDestroyed())overlay.webContents.send('session:status',{phase:'failed',level:0});});
+});
 ipcMain.on('overlay:collapse',(event,collapsed:unknown)=>{
   if(!isTrusted(event) || typeof collapsed!=='boolean' || !overlay) return;
   const [width,height]=overlay.getSize();
@@ -121,10 +154,13 @@ ipcMain.handle('window:set-shortcut',async(event,candidate:unknown)=>{
   try { await savePreferences({toggleShortcut:value}); } catch { shortcutError='快捷键已启用，但保存失败。';notifyState(); }
   return state();
 });
-ipcMain.handle('asr:sign',async event=>{
+ipcMain.handle('asr:sign',async(event,value:unknown,engine:unknown)=>{
   if(!isSettings(event)) throw new Error('请在设置页操作。');
+  const hotwords=value===undefined?DEFAULT_ASR_HOTWORDS:value;
+  if(!Array.isArray(hotwords) || hotwords.length>128 || !hotwords.every(word=>typeof word==='string' && isValidAsrHotword(word))) throw new Error('识别热词格式无效。');
   const credentials=await getTencentCredentials();
-  return buildTencentWsUrl({...credentials,hotwords:['RAG','Kubernetes','QPS','灰度','微服务','分布式']});
+  if(engine!==undefined && engine!=='16k_zh' && engine!=='16k_zh_en_2.0') throw new Error('语音识别引擎无效。');
+  return buildTencentWsUrl({...credentials,hotwords,engineModelType:engine});
 });
 ipcMain.on('session:status',(event,value:unknown)=>{
   if(!isTrusted(event) || event.sender!==settings?.webContents || !value || typeof value!=='object') return;
@@ -142,14 +178,53 @@ ipcMain.on('session:auto-status',(event,value:unknown)=>{
   if(!isTrusted(event)||event.sender!==settings?.webContents||typeof value!=='string'||value.length>180)return;
   if(overlay&&!overlay.isDestroyed())overlay.webContents.send('session:auto-status',value);
 });
+ipcMain.on('llm:retry',(event,question:unknown)=>{
+  if(!isTrusted(event)||event.sender!==overlay?.webContents||typeof question!=='string'||!question.trim()||question.length>4000)return;
+  if(settings&&!settings.isDestroyed())settings.webContents.send('llm:retry',question);
+  else openSettings();
+});
 ipcMain.handle('llm:start',(event,value:unknown)=>{
   if(!isSettings(event) || !value || typeof value!=='object') throw new Error('请求格式无效。');
   const req=value as Record<string,unknown>;
   if(typeof req.question!=='string' || !req.question.trim() || req.question.length>4000 || typeof req.system!=='string' || req.system.length>16000 || typeof req.user!=='string' || req.user.length>16000 || typeof req.remoteConsent!=='boolean') throw new Error('请求格式无效。');
-  if(!Array.isArray(req.refs) || req.refs.length>4 || !req.refs.every(value=>typeof value==='string' && value.length<=300)) throw new Error('引用格式无效。');
+  if(!Array.isArray(req.refs) || req.refs.length>6 || !req.refs.every(value=>typeof value==='string' && value.length<=300)) throw new Error('引用格式无效。');
   return answers.start({question:req.question,system:req.system,user:req.user,remoteConsent:req.remoteConsent,refs:req.refs as string[]});
 });
-ipcMain.handle('llm:cancel',event=>{if(!isTrusted(event)) throw new Error('无权操作。');answers.cancel();});
+ipcMain.handle('llm:cancel',event=>{if(!isTrusted(event)) throw new Error('无权操作。');answers.cancel();cancelSemantic(true);});
+ipcMain.handle('llm:revoke-consent',event=>{if(!isSettings(event)) throw new Error('请在设置页操作。');classificationController?.abort();answers.revokeRemoteConsent();cancelSemantic(true);});
+ipcMain.handle('knowledge:semantic-search',async(event,value:unknown)=>{
+  if(!isSettings(event))throw new Error('请在设置页操作。');
+  const input=value as SemanticInput;
+  if(!isValidSemanticInput(input))throw new Error('语义检索请求无效或未授权。');
+  cancelSemantic(false);
+  const controller=new AbortController();semanticController=controller;
+  try {
+    if(!embeddingFreeTierExhausted){
+      try {
+        const result=await semanticSearch.search(input);
+        if(controller.signal.aborted)throw new Error('语义检索已取消。');
+        return {...result,method:'embedding' as const};
+      } catch(error) {
+        if(controller.signal.aborted)throw new Error('语义检索已取消。');
+        if(error instanceof SemanticFailure&&error.category==='free_tier_exhausted')embeddingFreeTierExhausted=true;
+      }
+    }
+    const loaded=await loadProvider();
+    if(controller.signal.aborted)throw new Error('语义检索已取消。');
+    const result=await rerankKnowledge(loaded.provider,input,controller.signal,'disableThinking' in loaded&&loaded.disableThinking===true);
+    if(controller.signal.aborted)throw new Error('语义检索已取消。');
+    return {...result,method:'llm' as const};
+  } finally {if(semanticController===controller)semanticController=null;}
+});
+ipcMain.handle('knowledge:cancel',event=>{if(!isSettings(event))throw new Error('请在设置页操作。');cancelSemantic(false);});
+ipcMain.handle('english:get-enabled',event=>{if(!isTrusted(event)) throw new Error('无权访问。');return answers.getEnglishEnabled();});
+ipcMain.handle('english:set-enabled',(event,value:unknown)=>{
+  if(!isTrusted(event) || typeof value!=='boolean') throw new Error('设置无效。');
+  answers.setEnglishEnabled(value);
+  for(const win of [overlay,settings]) if(win && !win.isDestroyed()) win.webContents.send('english:enabled',value);
+  return value;
+});
+ipcMain.handle('english:retry',event=>{if(!isTrusted(event)) throw new Error('无权操作。');answers.retryEnglish();});
 ipcMain.handle('llm:test',async(event,consent:unknown)=>{
   if(!isSettings(event) || typeof consent!=='boolean') throw new Error('请求格式无效。');
   const {provider,remote}=await loadProvider();
